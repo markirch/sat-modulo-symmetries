@@ -2,13 +2,16 @@
 
 SAT Modulo Symmetries (SMS) is a framework that enhances SAT solvers with dynamic symmetry breaking. SMS is useful for isomorph-free generation and enumeration of graphs under constraints.
 
+This SMS package contains the enhanced SAT solvers `smsg` and `smsd` which generate undirected and directed graphs modulo isomorphisms respectively, as well as a Python sub-module for easier creation of graph encodings.
+
 ## Solvers
 
 SMS currently requires the SAT solver [Cadical](https://github.com/arminbiere/cadical), and optionally [Clingo](https://potassco.org/clingo). Please refer to the linked websites for installation instructions.
 Cadical is pulled automatically as part of the build process.
 
-To enable generation with forbidden subgraphs, you can optionally install the [Glasgow Subgraph Solver](https://github.com/ciaranm/glasgow-subgraph-solver).
-Run the script `pull-and-make-glasgow-solver.sh` to get it, then build with `cmake -DGLASGOW`.
+SMS has the optional feature to generate graphs that do not contain any of a set of input forbidden subgraphs.
+To enable, you need to install and build the [Glasgow Subgraph Solver](https://github.com/ciaranm/glasgow-subgraph-solver).
+Run the script `pull-and-make-glasgow-solver.sh` to obtain and build the Glasgow Subgraph Solver, then configure with the flag `-DGLASGOW`.
 
 ## Installing Clingo
 
@@ -18,20 +21,29 @@ We recommend to install Clingo via conda, but other options should work as well.
 ## Install
 
 With Cadical (and optionally Clingo) installed, SMS can be built with CMake. Execute the following commands:
+
 ```
 git clone https://github.com/markirch/sat-modulo-symmetries
 cd sat-modulo-symmetries
 mkdir build
 cmake -Bbuild -H.
 cmake --build build
-cmake install
 ```
+
 The built binaries will be found in `build/src/`. You can install them with
+
 ```
-cmake install
+cmake --install build
 ```
 
 `smsg` generates undirected graphs, `smsd` is for directed graphs.
+
+To build with the Glasgow Subgraph Solver, configure with `cmake -Bbuild -H. -DGLASGOW=1` instead.
+
+### Installing the Encoding Builder
+
+To install the encoding builder run `pip install .`.
+The installed pip package is called `sms-graph-builder`, and can be removed with `pip uninstall` as usual.
 
 ## Usage
 
@@ -75,4 +87,13 @@ Generate all non-bipartite graphs on 7 vertices (with chromatic number at least 
 
 For more usage options see `src/main.cpp`
 
+## Encoding Builder
 
+To generate all graphs with 7 vertices and maximum degree at most 3, build and solve the encoding as follows:
+
+```
+from pysms.graph_builder import *
+builder = GraphEncodingBuilder(7, directed=False)
+builder.maxDegree(3)
+builder.solve(allGraphs=True)
+```

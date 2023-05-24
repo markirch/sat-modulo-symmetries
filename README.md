@@ -92,7 +92,7 @@ For more usage options see `src/main.cpp`
 To generate all graphs with 7 vertices and maximum degree at most 3, build and solve the encoding as follows:
 
 ```
-from pysms.graph_builder import *
+from pysms.graph_builder import GraphEncodingBuilder
 builder = GraphEncodingBuilder(7, directed=False)
 builder.maxDegree(3)
 builder.solve(allGraphs=True)

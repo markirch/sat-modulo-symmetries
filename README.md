@@ -9,28 +9,30 @@ This SMS package contains the enhanced SAT solvers `smsg` and `smsd` which gener
 SMS currently requires the SAT solver [Cadical](https://github.com/arminbiere/cadical), and optionally [Clingo](https://potassco.org/clingo). Please refer to the linked websites for installation instructions.
 Cadical is pulled automatically as part of the build process.
 
-SMS has the optional feature to generate graphs that do not contain any of a set of input forbidden subgraphs.
-To enable, you need to install and build the [Glasgow Subgraph Solver](https://github.com/ciaranm/glasgow-subgraph-solver).
-Run the script `pull-and-make-glasgow-solver.sh` to obtain and build the Glasgow Subgraph Solver, then configure with the flag `-DGLASGOW`.
-
-## Installing Clingo
+### Installing Clingo
 
 For the installation of Clingo see [https://potassco.org/clingo](https://potassco.org/clingo) and [https://github.com/potassco/clingo-cmake-example](https://github.com/potassco/clingo-cmake-example).
 We recommend to install Clingo via conda, but other options should work as well.
 
+### Forbidden Subgraphs
+
+SMS has the optional feature to generate graphs that do not contain any of a set of input forbidden subgraphs.
+To enable it, you need to install and build the [Glasgow Subgraph Solver](https://github.com/ciaranm/glasgow-subgraph-solver).
+Run the script `pull-and-make-glasgow-solver.sh` to obtain and build the Glasgow Subgraph Solver, then configure with the flag `-DGLASGOW`.
+
 ## Install
 
-With Cadical (and optionally Clingo) installed, SMS can be built with CMake. Execute the following commands:
+With Cadical (and optionally Clingo) installed, SMS can be built with CMake in the usual way. Execute the following commands:
 
 ```
 git clone https://github.com/markirch/sat-modulo-symmetries
 cd sat-modulo-symmetries
-mkdir build
 cmake -Bbuild -H.
 cmake --build build
 ```
 
-The built binaries will be found in `build/src/`. You can install them with
+Note that you can parallelize the build process, the precise way depends on your backend build system (for example with GNU Make do `cmake --build build -j n` to build with n concurrent processes).
+The built binaries are found in `build/src/`. You can install them with
 
 ```
 cmake --install build
@@ -38,7 +40,7 @@ cmake --install build
 
 `smsg` generates undirected graphs, `smsd` is for directed graphs.
 
-To build with the Glasgow Subgraph Solver, configure with `cmake -Bbuild -H. -DGLASGOW=1` instead.
+To build with the Glasgow Subgraph Solver, configure with `cmake -Bbuild -H. -DGLASGOW=1` instead (any value for the GLASGOW variable will work).
 
 ### Installing the Encoding Builder
 

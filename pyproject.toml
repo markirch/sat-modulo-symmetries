@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "sms-graph-builder"
+version = "2023.6"
+description = "A package for building propositional encodings of graphs. Contains several pre-defined encodings, as well as the ability to specify user-defined constraints."
+authors = [
+	{name = "Markus Kirchweger", email = "markus.kirchweger@ac.tuwien.ac.at"},
+	{name = "Tomáš Peitl", email = "peitl@ac.tuwien.ac.at"},
+]
+keywords = ["graphs", "propositional formula", "encoding", "SAT", "CNF"]
+
+[project.urls]
+#Documentation = "https://readthedocs.org/projects/sat-modulo-symmetries/"
+#Repository = "https://github.com/markirch/sat-modulo-symmetries"
+
+[tool.setuptools]
+packages = ["pysms"]

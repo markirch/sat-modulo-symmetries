@@ -1,4 +1,4 @@
-site_name: SAT modulo Symmetries
+# site_name: SAT modulo Symmetries
 theme:
   name: readthedocs
   highlightjs: true

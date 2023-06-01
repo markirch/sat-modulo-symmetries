@@ -35,8 +35,10 @@ There are two main options to use the programs:
 
 - Using a Python wrapper comming with many predefined properties which can be added 
 - Using the programs `smsg`  and `smsd` directly.
+- 
 For a quick start, we recommend using the Python wrapper.
 For advanced usage, please [read the docs](https://sat-modulo-symmetries.readthedocs.io/en/latest/advanced/).
+
 
 ### Python Wrapper
 

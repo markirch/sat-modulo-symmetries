@@ -57,7 +57,6 @@ Similar, we can check the FB Conjecture using the same script and the argument `
 
 ## Planar graphs, Earth-Moon Problem, planar Turan Numbers and generation of OEIS integer sequences related to planar graphs
 
-
 To enumerate planar graphs with different encodings, 
 we used the script `./encodings/planar.py` with the following commands:
 
@@ -175,6 +174,6 @@ Automatically, some assumptions are made when using the parameter `--earthmoon c
 
 Last, we can simply test whether the graph $C_5[4,4,4,4,3]$ is biplanar, using the following command
 ```bash
-  python ./encodings/planarity.py -v 19 --directed --earthmoon_candidate1 --args_SMS " --thickness2 5"
+  python ./encodings/planarity.py -v 19 --directed --earthmoon_candidate1
 ```
 

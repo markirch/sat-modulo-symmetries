@@ -13,7 +13,7 @@ authors = [
 keywords = ["graphs", "propositional formula", "encoding", "SAT", "CNF"]
 
 [project.urls]
-#Documentation = "https://readthedocs.org/projects/sat-modulo-symmetries/"
+#Documentation = "https://sat-modulo-symmetries.readthedocs.io/"
 #Repository = "https://github.com/markirch/sat-modulo-symmetries"
 
 [tool.setuptools]

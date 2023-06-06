@@ -11,5 +11,5 @@ We also want to thank Katalin Fazekas for implementing an easy to use interface 
 
 ## Contact
 
-If there are any questions, please don't hesitate to contact use:
+If there are any questions, please don't hesitate to contact us:
  <markus.kirchweger@ac.tuwien.ac.at>.

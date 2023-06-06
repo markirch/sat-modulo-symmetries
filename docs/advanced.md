@@ -16,7 +16,7 @@ At the end the an `PartiallyDefinedGraphChecker` object must be added to the sol
 
 We give a very simple example, for providing a propagator only keeping triangular free graphs:
 
-```
+```python
 class TriangleFreeChecker : public PartiallyDefinedGraphChecker
 {
     void checkProperty(const adjacency_matrix_t &matrix)
@@ -53,13 +53,17 @@ SMS has the optional feature to generate graphs that do not contain any of a set
 To enable it, you need to install and build the [Glasgow Subgraph Solver](https://github.com/ciaranm/glasgow-subgraph-solver).
 Run the script `pull-and-make-glasgow-solver.sh` to obtain and build the Glasgow Subgraph Solver, then configure with the flag `-DGLASGOW`.
 
-To build with the Glasgow Subgraph Solver, configure with `cmake -Bbuild -H. -DGLASGOW=1` instead (any value for the GLASGOW variable will work).
+To build with the Glasgow Subgraph Solver, configure with 
+```bash
+cmake -Bbuild -H. -DGLASGOW=1
+``` 
+instead (any value for the GLASGOW variable will work).
 
 The forbidden subgraphs are provided to `smsg` by a file. The file is given to the program by the argument `--forbiddenSubgraphs FILE`, where the file contains a forbidden graph in each line. The graphs must be given in an easy to parse format easiest explained on an example
 
 ### Example for forbidden subgraphs
 
-```
+```plaintext
 0 1 1 2 0 2
 0 1 1 2 2 3 0 3
 ```

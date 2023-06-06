@@ -57,8 +57,6 @@ Similar, we can check the FB Conjecture using the same script and the argument `
 
 ## Planar graphs, Earth-Moon Problem, planar Turan Numbers and generation of OEIS integer sequences related to planar graphs
 
-TODO rewrite in new framework!!!!!!!!!!!!!!!!
-TODO update everything and use new commands
 
 To enumerate planar graphs with different encodings, 
 we used the script `./encodings/planar.py` with the following commands:

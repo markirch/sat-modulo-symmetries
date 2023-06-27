@@ -47,13 +47,13 @@ The wrapper is implemented in the file `pysms/graph_builder.py`, if you followed
 For example, the following command produces all graphs with 6 vertices up to isomorphism with minimum degree at least 3.
 
 ```bash
-python -m pysms.graph_builder.py --vertices 6 --delta_low 3 --allGraphs
+python -m pysms.graph_builder --vertices 6 --delta-low 3 --all-graphs
 ``` 
 
 The found graphs are printed to standard output as Python lists of edges. The most important options are the following:
 
 - `--vertices n` : search for graph with `n` vertices;
-- `--allGraphs` : enumerate all graphs up to isomorphism satisfying the given properties (without this, the program terminates after finding the first graph);
+- `--all-graphs` : enumerate all graphs up to isomorphism satisfying the given properties (without this, the program terminates after finding the first graph);
 - `--directed` : generate directed graphs (default is undirected);
 - `--Delta_upp` : upper bound on the maximum degree;
 - `--delta_low` : lower bound on the minimum degree;
@@ -62,7 +62,7 @@ The found graphs are printed to standard output as Python lists of edges. The mo
 To get a complete list of all available options for the encoding builder, run 
 
 ```bash
-python pysms.graph_builder.py --help
+python -m pysms.graph_builder --help
 ```
 
 For all options available for `smsg` or `smsd`, run
@@ -73,7 +73,7 @@ smsg --help
 
 SMS relies on a procedure called the _minimality check_ to filter out non-canonical isomorphic copies of graphs.
 This procedure is often fast, but has worst-case exponential running time.
-To avoid getting stuck in hard corner cases, we strongly recommend to use a time limit (cutoff) for the minimality check, by adding `--args_SMS "--cutoff 20000"`.
+To avoid getting stuck in hard corner cases, we strongly recommend to use a time limit (cutoff) for the minimality check, by adding `--args-SMS "--cutoff 20000"`.
 This limits the number of recursive calls in the minimality check, but potentially results in incomplete symmetry breaking.
 The graphs can be filtered afterwards with tools like [Nauty](https://pallini.di.uniroma1.it/) using the `shortg` command.
 
@@ -119,11 +119,11 @@ So, `[-builder.var_edge(i,j), -builder.var_edge(i,k), -builder.var_edge(j,k)]` r
 
 The most important arguments of `smsg` and `smsd` are as follows:
 
-`smsg -v VERTICES [--allGraphs] [--frequency FREQUENCY] [--dimacs FILE] [--assignmentCutoff ACUTOFF] [--assignmentCutoffPrerunTime TIME] [--cutoff CUTOFF] [--printStats]`
+`smsg -v VERTICES [--all-graphs] [--frequency FREQUENCY] [--dimacs FILE] [--assignmentCutoff ACUTOFF] [--assignmentCutoffPrerunTime TIME] [--cutoff CUTOFF] [--printStats]`
 
 - `-v VERTICES` gives the number of vertices (order) of the graph;
 - `-b n m` searches for a bipartite graph with n+m vertices where the first n vertices and the last m vertices form the partitions;
-- `--allGraphs` to compute all graphs;
+- `--all-graphs` to compute all graphs;
 - `--frequency FREQUENCY` used for balancing the time in the minimality check and the solver itself. For example if the frequency is 5 then the minimality check is only called every 5-th time (for reproducibility, note that this has a random component);
 - `--dimacs FILE` the file name providing the SAT encoding in DIMACS format. For the undirected version the undirected edge variables are assumed to be given row-wise left-to-right from the upper triangle of the adjacency matrix. For the directed version the directed edge variables are assumed to be given row wise without the diagonal. For example, for an undirected graph on n=4 vertices the corresponding edge variables are given by the following literals: e<sub>0,1</sub> &harr; 1, e<sub>0,2</sub> &harr; 2, e<sub>0,3</sub> &harr; 3, e<sub>1,2</sub> &harr; 4, e<sub>1,3</sub> &harr; 5, e<sub>2,3</sub> &harr; 6. This can also be represented by the following matrix (ignoring diagonal entries):
 
@@ -145,10 +145,10 @@ For the directed version the edge variables are given by the following pattern:
 
 Note that this doesn't correspond with the order &preceq; of the vertex pairs used for defining the order on directed graphs.
 
-- `--assignmentCutoff ACUTOFF` is used for cubing, if at least `ACUTOFF` edge variables are assigned and propagate is called, then a cube representing the partial assignment is generated.
-- `--assignmentCutoffPrerunTime TIME` gives the prerun time in seconds before starting cubing.
+- `--assignment-cutoff ACUTOFF` is used for cubing, if at least `ACUTOFF` edge variables are assigned and propagate is called, then a cube representing the partial assignment is generated.
+- `--assignment-cutoff-prerun-time TIME` gives the prerun time in seconds before starting cubing.
 - `--cutoff CUTOFF` gives the maximal recursive calls in the minimality check to avoid exponential behaviour. Note that this can result in an incomplete symmetry breaking.
-- `--printStats` prints some statistics of the computations, especially the time spend in different propagators.
+- `--print-stats` prints some statistics of the computations, especially the time spend in different propagators.
 - `--chi c` ensures chromatic number at least c.
 
 For a complete list of all arguments call `smsg --help` and `smsd --help` respectively.
@@ -158,13 +158,13 @@ For a complete list of all arguments call `smsg --help` and `smsd --help` respec
 Generate all graphs on 7 vertices modulo isomorphism.
 
 ```bash
-smsg -v 7 --allGraphs
+smsg -v 7 --all-graphs
 ```
 
 Generate all non-bipartite graphs on 7 vertices (with chromatic number at least 3) and show times spend in minimality check and for coloring:
 
 ```bash
-smsg -v 7 --allGraphs --chi 3 --printStats
+smsg -v 7 --all-graphs --chi 3 --print-stats
 ```
 
 ## Solvers

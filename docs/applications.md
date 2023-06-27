@@ -10,20 +10,20 @@ The script `./encodings/kochen_specker.py` can be used to reproduce the results.
 The following command can be used to generate all KS-candidates with 19 vertices:
 
 ```python
-    python ./encodings/kochen_specker.py -v 19 --allGraphs
+    python ./encodings/kochen_specker.py -v 19 --all-graphs
 ```
 
-To generate cubes, we can use the arguments `--assignmentCutoffPrerunTime` which gives the time spend in seconds before cubing,  and `--assignmentCutoff`, which gives the minimal number of edge variables, which must be assigned for a cube.
+To generate cubes, we can use the arguments `--assignment-cutoff-prerun-time` which gives the time spend in seconds before cubing,  and `--assignment-cutoff`, which gives the minimal number of edge variables, which must be assigned for a cube.
 
 ```python
-    python ./encodings/kochen_specker.py -v 22 --allGraphs --args_SMS "--assignmentCutoffPrerunTime 5 --assignmentCutoff 110"
+    python ./encodings/kochen_specker.py -v 22 --all-graphs --args-SMS "--assignment-cutoff-prerun-time 5 --assignment-cutoff 110"
 ```
 
 The previous command produces cubes for 22 vertices.
 To solve the problem with the cubes stored in the file `cubeFile`, we use the following command:
 
 ```python
-    python ./encodings/kochen_specker.py -v 22 --allGraphs --args_SMS " --cubeFile cubeFile --cube2solve 2390 2392 "
+    python ./encodings/kochen_specker.py -v 22 --all-graphs --args-SMS " --cubes cubeFile --cube2solve 2390 2392 "
 ```
 
 ## Erdős–Faber–Lovász conjecture
@@ -43,7 +43,7 @@ For example to test whether there is a hyper graph with 10 vertices and 14 edges
 we can use the following command
 
 ```python
-    python ./encodings/efl.py --n1 10 --n2 14 --chi3 11 --args_SMS "--minEdgeChromaticNumberHypergraph 11"
+    python ./encodings/efl.py --n1 10 --n2 14 --chi3 11 --args-SMS "--minEdgeChromaticNumberHypergraph 11"
 ```
 
 Note that checking the minimum edge chromatic number is part of SMS and not the encoding itself and hence has to be given as argument to SMS.
@@ -51,7 +51,7 @@ Note that checking the minimum edge chromatic number is part of SMS and not the 
 Similar, we can check the FB Conjecture using the same script and the argument `maxClosedNeighborhood`.
 
 ```python
-    python ./encodings/efl.py --n1 10 --n2 14 --maxClosedNeighborhood 7 --chi3 8 --args_SMS "--minEdgeChromaticNumberHypergraph 8"
+    python ./encodings/efl.py --n1 10 --n2 14 --maxClosedNeighborhood 7 --chi3 8 --args-SMS "--minEdgeChromaticNumberHypergraph 8"
 ```
 
 
@@ -64,7 +64,7 @@ we used the script `./encodings/planar.py` with the following commands:
   <li>Kuratowski based encoding:
 
 ```bash
-python ./pysms/graph_builder.py -v $n --allGraphs --planar
+python ./pysms/graph_builder.py -v $n --all-graphs --planar
 ```
 
     In this case, the planarity is not part of the encoding but rather forwarded to the SMS solver, and checked with a frequency of 1/5, i.e., only every 5th time, we check if the partially defined graph is planar. If not a suitable clause is added.
@@ -72,12 +72,12 @@ python ./pysms/graph_builder.py -v $n --allGraphs --planar
   <li>
   Schnyder order based encoding:
 ```bash
-python ./encodings/planarity.py -v $n --allGraphs --planar_schnyder
+python ./encodings/planarity.py -v $n --all-graphs --planar_schnyder
 ```
   </li>
   <li> Universal set based encoding:
 ```bash
-python ./encodings/planarity.py -v $n --allGraphs --planar_universal
+python ./encodings/planarity.py -v $n --all-graphs --planar_universal
 ```
   </li>
 </ul>
@@ -91,57 +91,57 @@ To investigate all OEIS sequences, we used the following commands:
 $k$-connected $n$-vertex graphs 
 for $k \in \{0,1,2,3,4,5\}$ (A88,A1349,A2218,A6290,A86216,A86217):<br>
 ```bash
-python ./pysms/graph_builder.py -v $n --allGraphs --connectivity_low $k
+python ./pysms/graph_builder.py -v $n --all-graphs --connectivity_low $k
 ```
 
 $k$-connected $n$-vertex planar graphs 
 for $k \in \{0,1,2,3,4,5\}$ (A5470,A3094,A21103,A944,A7027,A361578):<br>
 ```bash
-python ./pysms/graph_builder.py -v $n --allGraphs --connectivity_low $k --planar
+python ./pysms/graph_builder.py -v $n --all-graphs --connectivity_low $k --planar
 ```
 
 $k$-connected directed $n$-vertex graphs 
 for $k \in \{0,1,2,3\}$ (A273,A3085,A361367,A361370):<br>
 ```bash
-python ./pysms/graph_builder.py -v $n --allGraphs --connectivity_low $k --directed
+python ./pysms/graph_builder.py -v $n --all-graphs --connectivity_low $k --directed
 ```
 
 $k$-connected directed $n$-vertex planar graphs 
 for $k \in \{0,1,2,3\}$ (A361366,A361368,A361369,A361371):<br>
 ```bash
-python ./pysms/graph_builder.py -v $n --allGraphs --connectivity_low $k --planar --directed
+python ./pysms/graph_builder.py -v $n --all-graphs --connectivity_low $k --planar --directed
 ```
 
 $k$-connected $n$-vertex triangulations
 for $k \in \{3,4,5\}$ (A109,A7021,A111358):<br>
 ```bash
-python ./pysms/graph_builder.py -v $n --allGraphs --connectivity_low $k --planar --num_edges_low $((3*$n-6))
+python ./pysms/graph_builder.py -v $n --all-graphs --connectivity_low $k --planar --num_edges_low $((3*$n-6))
 ```
 
 $n$-vertex planar graphs with even degrees (A49339):<br>
 ```bash
-python ./pysms/graph_builder.py -v $n --allGraphs --planar --evendegrees
+python ./pysms/graph_builder.py -v $n --all-graphs --planar --evendegrees
 ```
 
 connected $n$-vertex planar graphs with even degrees (A49365):<br>
 ```bash
-python ./pysms/graph_builder.py -v $n --allGraphs --planar --evendegrees --connectivity_low 1
+python ./pysms/graph_builder.py -v $n --all-graphs --planar --evendegrees --connectivity_low 1
 ```
 
 $n$-vertex planar graphs with minimum degree at least $k$ 
 for $k \in \{1,2,3,4,5\}$ (A49369-A49373):<br>
 ```bash
-python ./pysms/graph_builder.py -v $n --allGraphs --planar --delta_low $k
+python ./pysms/graph_builder.py -v $n --all-graphs --planar --delta_low $k
 ```
 
 connected triangle-free 3-regular $2n$-vertex planar graphs (A255600):<br>
 ```bash
-python ./pysms/graph_builder.py -v $((2*$n)) --allGraphs --connectivity_low 1 --planar --Ckfree 3 --delta_low 3 --Delta_upp 3
+python ./pysms/graph_builder.py -v $((2*$n)) --all-graphs --connectivity_low 1 --planar --Ckfree 3 --delta_low 3 --Delta_upp 3
 ```
 
 2-connected 3-regular $n$-vertex planar graphs (A58378):<br>
 ```bash
-python ./pysms/graph_builder.py -v $((2*$n)) --allGraphs --planar --delta_low 3 --Delta_upp 3 --connectivity_low 2
+python ./pysms/graph_builder.py -v $((2*$n)) --all-graphs --planar --delta_low 3 --Delta_upp 3 --connectivity_low 2
 ```
 
 
@@ -151,7 +151,7 @@ The arguments are as usual, especially we use the argument `--Ckfree c` to forbi
 
 For example, the following command produces a planar graph with $n$ vertices and atleast $m$ edges without a $4$-cycle or returns unsat.
 ```bash
-python ./pysms/graph_builder.py -v $n --num_edges_low $m --Ckfree 4 --args_SMS " --planar 5 "
+python ./pysms/graph_builder.py -v $n --num_edges_low $m --Ckfree 4 --args-SMS " --planar 5 "
 ```
 
 
@@ -162,7 +162,7 @@ For creating the encoding for the Earth-Moon-Problem (based on planar directed g
 
 For example the following command produces a directed graph, whose underlying graph has $11$ vertices, chromatic number at least $9$ and is biplanar (i.e., has thickness $2$).
 ```bash
-python ./encodings/planarity.py -v 11 --directed --earthmoon 9 --args_SMS " --thickness2 5"
+python ./encodings/planarity.py -v 11 --directed --earthmoon 9 --args-SMS " --thickness2 5"
 ```
 
 Automatically, some assumptions are made when using the parameter `--earthmoon c`

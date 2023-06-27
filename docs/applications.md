@@ -20,10 +20,10 @@ To generate cubes, we can use the arguments `--assignmentCutoffPrerunTime` which
 ```
 
 The previous command produces cubes for 22 vertices.
-To solve the problem with the cubes, we use the following command:
+To solve the problem with the cubes stored in the file `cubeFile`, we use the following command:
 
 ```python
-    ./scripts/runScripts/script_kochen_specker.sh 22 tempfile.txt "" "--frequency 30 --allModels --printStats --non010 --useCadical --cubeFile cubeFile --cube2solve 2390 2392
+    python ./encodings/kochen_specker.py -v 22 --allGraphs --args_SMS " --cubeFile cubeFile --cube2solve 2390 2392 "
 ```
 
 ## Erdős–Faber–Lovász conjecture
@@ -64,7 +64,7 @@ we used the script `./encodings/planar.py` with the following commands:
   <li>Kuratowski based encoding:
 
 ```bash
-python ./pysms/graph_builder.py -v $n --allGraphs --args_SMS " --planar 5 "
+python ./pysms/graph_builder.py -v $n --allGraphs --planar
 ```
 
     In this case, the planarity is not part of the encoding but rather forwarded to the SMS solver, and checked with a frequency of 1/5, i.e., only every 5th time, we check if the partially defined graph is planar. If not a suitable clause is added.

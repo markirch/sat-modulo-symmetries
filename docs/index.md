@@ -5,26 +5,27 @@ SAT Modulo Symmetries (SMS) is a framework that enhances SAT solvers with dynami
 This SMS package contains the enhanced SAT solvers `smsg` and `smsd` written in C++ which generate undirected and directed graphs modulo isomorphisms respectively, as well as a Python sub-module for easier creation of graph encodings with many predefined encodings to use.
 
 
+## Requirements
 
-## Install
+- The SAT solver [Cadical](https://github.com/arminbiere/cadical).
+- To install the Python wrapper and encodings, [pip](https://pypi.org/project/pip).
+- [CMake](https://cmake.org)
+
+## Install (with root privileges)
 
 Currently, only installation on Linux is supported.
-With [Cadical](https://github.com/arminbiere/cadical) installed, SMS can be built as follows: <!---CMake in the usual way, by executing the following commands: -->
+With [Cadical](https://github.com/arminbiere/cadical) installed, SMS can be built and installed as follows: <!---CMake in the usual way, by executing the following commands: -->
 
 ```bash
 git clone https://github.com/markirch/sat-modulo-symmetries
 cd sat-modulo-symmetries
-./buildScript.sh
+chmod +x build-and-install.sh
+./build-and-install.sh
 ```
 
-<!--- Note that you can parallelize the build process, the precise way depends on your backend build system (for example with GNU Make do `cmake --build build -j n` to build with n concurrent processes). -->
-The `buildScript.sh` uses CMake and the built binaries are found in `build/src/`. You can install them with
-
-```bash
-sudo cmake --install build
-```
-
-<!--- `cmake --install build` results in a permission denied on my laptop -->
+`build-and-install.sh` uses CMake, the built binaries are found in `build/src/`.
+They are automatically installed to the default location (which probably requires root privileges, the script will ask).
+Use `build-and-install-local.sh` instead if you need to install locally.
 
 `smsg` generates undirected graphs, `smsd` is for directed graphs.
 
@@ -33,50 +34,57 @@ sudo cmake --install build
 
 There are two main options to use the programs:
 
-- Using a Python wrapper comming with many predefined properties which can be added 
-- Using the programs `smsg`  and `smsd` directly.
+- using a Python wrapper, packed with many predefined encodings of graph properties;
+- using the programs `smsg` and `smsd` directly.
 
 For a quick start, we recommend using the Python wrapper.
 
 
 ### Python Wrapper
 
-The wrapper can be used as a library to build custom encodings or directly used for enumerating graphs.
-The wrapper is implemented in the file `pysms/graph_builder.py`. 
+The wrapper can be used as a library to build custom encodings or directly for enumerating graphs.
+The wrapper is implemented in the file `pysms/graph_builder.py`, if you followed the installation process, the package `pysms` is installed and available for import. 
 For example, the following command produces all graphs with 6 vertices up to isomorphism with minimum degree at least 3.
 
 ```bash
-python pysms/graph_builder.py --vertices 6 --delta_low 3 --allGraphs
+python -m pysms.graph_builder.py --vertices 6 --delta_low 3 --allGraphs
 ``` 
-The graphs are printed to the output as edge list. The most relevant options are the following:
 
-- `--vertices n` : search for graph with `n` vertices.
-- `--allGraphs` : enumerate all graphs up to ismorphism, satisfying the given properties.
-- `--directed` : generate directed graphs, per default undirected.
-- `--Delta_upp` : upperbound on the maximum degree.
-- `--delta_low` : lowerbound on the minimum degree.
-- `--args_SMS s` : arguments forwarded to either `smsg` or `smsg`, i.e., string `s` is added as argument to the choosen program.
+The found graphs are printed to standard output as Python lists of edges. The most important options are the following:
 
-For a complete list of all available options for the python script, execute 
+- `--vertices n` : search for graph with `n` vertices;
+- `--allGraphs` : enumerate all graphs up to isomorphism satisfying the given properties (without this, the program terminates after finding the first graph);
+- `--directed` : generate directed graphs (default is undirected);
+- `--Delta_upp` : upper bound on the maximum degree;
+- `--delta_low` : lower bound on the minimum degree;
+- `--args_SMS s` : arguments forwarded to either `smsg` or `smsg`, i.e., the string `s` is appended as argument to the command line.
+
+To get a complete list of all available options for the encoding builder, run 
+
 ```bash
-python pysms/graph_builder.py --help
+python pysms.graph_builder.py --help
 ```
-For all options available to forward to `smsg` or `smsd`, execute
+
+For all options available for `smsg` or `smsd`, run
+
 ```bash
 smsg --help
 ```
 
-
-If too much time is spend in the minimality check, we strongly advice to use a cutoff of the minimality check algorithm, i.e., adding `--args_SMS "--cutoff 20000"`. This limits the number of recursive calls in the minimality check, but potentially results in an incomplete symmetry breaking. The graphs can be filtered afterwards with tools like  [nauty](https://pallini.di.uniroma1.it/) using the `shortg` command.
+SMS relies on a procedure called the _minimality check_ to filter out non-canonical isomorphic copies of graphs.
+This procedure is often fast, but has worst-case exponential running time.
+To avoid getting stuck in hard corner cases, we strongly recommend to use a time limit (cutoff) for the minimality check, by adding `--args_SMS "--cutoff 20000"`.
+This limits the number of recursive calls in the minimality check, but potentially results in incomplete symmetry breaking.
+The graphs can be filtered afterwards with tools like [Nauty](https://pallini.di.uniroma1.it/) using the `shortg` command.
 
 
 #### Installing the Encoding Builder
 
-To install the encoding builder run 
+The encoding builder is installed alongside `smsg` and `smsd` by `build-and-install.sh`, using `pip` as follows: 
 ```bash
 pip install .
 ```
-The installed pip package is called `pysms`, and can be removed with `pip uninstall` as usual.
+The installed importable module is `pysms`, but the pip package is called `sms-graph-builder`, and it can be removed with `pip uninstall sms-graph-builder` as usual.
 
 #### Example 1
 
@@ -161,7 +169,7 @@ smsg -v 7 --allGraphs --chi 3 --printStats
 
 ## Solvers
 
-SMS currently requires the SAT solver [Cadical](https://github.com/arminbiere/cadical), but optionally als supports [Clingo](https://potassco.org/clingo). Please refer to the linked websites for installation instructions.
+SMS currently requires the SAT solver [Cadical](https://github.com/arminbiere/cadical), but optionally also supports [Clingo](https://potassco.org/clingo). Please refer to the linked websites for installation instructions.
 Cadical is pulled automatically as part of the build process.
 
 ### Installing Clingo

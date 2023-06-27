@@ -1,0 +1,531 @@
+// argument parsing
+    for (int i = 1; i < argc; i++)
+    {
+        if (strcmp("--allModels", argv[i]) == 0)
+        {
+            allModels = true;
+            continue;
+        }
+
+#ifdef INCLUDE_CLINGO
+        if (strcmp("--useClingo", argv[i]) == 0)
+        {
+            useCadical = false;
+            continue;
+        }
+#endif
+
+        if (strcmp("-c", argv[i]) == 0 || strcmp("--connected", argv[i]) == 0)
+        {
+            generate_connected = true;
+            continue;
+        }
+
+        if (strcmp("--vertices", argv[i]) == 0 || strcmp("-v", argv[i]) == 0)
+        {
+            if (b_vertices[0] != 0 || b_vertices[1] != 0)
+            {
+                printf("cannot specify both -v and -b\n");
+                EXIT_UNWANTED_STATE
+            }
+            i++;
+            vertices = atoi(argv[i]);
+            lastVertex = vertices - 1;
+            continue;
+        }
+
+        if (strcmp("--bipartite", argv[i]) == 0 || strcmp("-b", argv[i]) == 0)
+        {
+            if (vertices != 0)
+            {
+                printf("cannot specify both -v and -b\n");
+                EXIT_UNWANTED_STATE
+            }
+            hypermode = true;
+            i++;
+            b_vertices[0] = atoi(argv[i]);
+            i++;
+            b_vertices[1] = atoi(argv[i]);
+            vertices = b_vertices[0] + b_vertices[1];
+            lastVertex = vertices - 1;
+            /* initialize two partitions for the minimality check
+             * custom partitions can be specified as well, they will
+             * override the setting here. Be cerful to maintain consistency */
+            initialPartition = vector<bool>(vertices, false);
+            initialPartition[0] = true;
+            initialPartition[b_vertices[0]] = true;
+            continue;
+        }
+
+        if (strcmp("--timeout", argv[i]) == 0 || strcmp("-t", argv[i]) == 0)
+        {
+            i++;
+            timeout = atoi(argv[i]);
+            continue;
+        }
+
+        if (strcmp("--printStats", argv[i]) == 0)
+        {
+            printStats = true;
+            continue;
+        }
+
+        if (strcmp("--assignmentScoring", argv[i]) == 0)
+        {
+            i++;
+            assignmentScoring = atoi(argv[i]);
+            continue;
+        }
+
+        if (strcmp("--assignmentCutoff", argv[i]) == 0)
+        {
+            i++;
+            assignmentCutoff = atoi(argv[i]);
+            continue;
+        }
+
+        if (strcmp("--assignmentCutoffPrerun", argv[i]) == 0)
+        {
+            i++;
+            assignmentCutoffPrerun = atoi(argv[i]);
+            continue;
+        }
+
+        if (strcmp("--assignmentCutoffPrerunTime", argv[i]) == 0)
+        {
+            i++;
+            assignmentCutoffPrerunTime = atoi(argv[i]);
+            continue;
+        }
+
+        if (strcmp("--cnf", argv[i]) == 0)
+        {
+            i++;
+            cnfFile = ifstream(argv[i]);
+            if (cnfFile.fail())
+            {
+                EXIT_UNWANTED_STATE
+            }
+            continue;
+        }
+
+        if (strcmp("--dimacs", argv[i]) == 0)
+        {
+            i++;
+            dimacsFile = ifstream(argv[i]);
+            if (dimacsFile.fail())
+            {
+                EXIT_UNWANTED_STATE
+            }
+            continue;
+        }
+
+        if (strcmp("--forall", argv[i]) == 0)
+        {
+            PRINT_CURRENT_LINE
+            i++;
+            forAllFile = ifstream(argv[i]);
+            if (forAllFile.fail())
+            {
+                EXIT_UNWANTED_STATE
+            }
+            continue;
+        }
+
+        if (strcmp("--forbiddenSubgraphs", argv[i]) == 0)
+        {
+            i++;
+            forbiddenSubgraphFile = ifstream(argv[i]);
+            continue;
+        }
+
+        if (strcmp("--eliminateAllsubgraphs", argv[i]) == 0)
+        {
+            eliminateAllsubgraphs = true;
+            continue;
+        }
+
+        if (strcmp("--maxPathLength", argv[i]) == 0 || strcmp("-p", argv[i]) == 0)
+        {
+            printf("Error: Use subgraph isormophism check for excluding");
+            EXIT_UNWANTED_STATE
+        }
+
+        if (strcmp("--frequency", argv[i]) == 0 || strcmp("-f", argv[i]) == 0)
+        {
+            i++;
+            frequency = atoi(argv[i]);
+            continue;
+        }
+
+        if (strcmp("--planarityFrequency", argv[i]) == 0 || strcmp("-planar", argv[i]) == 0)
+        {
+            i++;
+            planarityFrequency = atoi(argv[i]);
+            continue;
+        }
+
+        if (strcmp("--thickness2", argv[i]) == 0)
+        {
+            i++;
+            thickness2Frequency = atoi(argv[i]);
+            continue;
+        }
+
+        // if (strcmp("--embeddable", argv[i]) == 0)
+        // {
+        //     i++;
+        //     checkEmbeddabilityKS = atoi(argv[i]);
+        //     continue;
+        // }
+
+        if (strcmp("--checkSolutionInProp", argv[i]) == 0)
+        {
+            chechSolutionInProp = true;
+            continue;
+        }
+
+        if (strcmp("--printPartial", argv[i]) == 0)
+        {
+            i++;
+            printPartiallyDefined = atoi(argv[i]);
+            continue;
+        }
+
+        if (strcmp("--frequencyConnectedComponentsSwap", argv[i]) == 0 || strcmp("-fc", argv[i]) == 0)
+        {
+            i++;
+            frequencyConnectedComponentsSwap = atoi(argv[i]);
+            continue;
+        }
+
+        if (strcmp("--initialPartition", argv[i]) == 0)
+        {
+            assert(vertices != 0);            // vertices must be set before partition
+            if (initialPartition.size() == 0) // if some arguments enforce already some partition, then it is refined by this
+                initialPartition = vector<bool>(vertices, false);
+            int curPos = 0;
+            while (i + 1 < argc && argv[i + 1][0] != '-')
+            {
+                i++;
+                initialPartition[curPos] = true;
+                int step = atoi(argv[i]);
+                curPos += step;
+            }
+            assert(vertices == curPos); // sum of the sizes of paritions must coincide with the number of vertices
+            if (hypermode)
+                assert(initialPartition[b_vertices[0]]); // partitions must respect the global bipartition
+            continue;
+        }
+
+        if (strcmp("--vertexOrderingsFile", argv[i]) == 0)
+        {
+            assert(vertices != 0); // vertices must be set before partition
+            i++;
+            std::ifstream f = ifstream(argv[i]);
+
+            // first line gives initial partition
+            initialPartition = vector<bool>(vertices, false);
+            int curPos = 0;
+
+            string line;
+            getline(f, line);
+            istringstream iss(line);
+            string space_delimiter = " ";
+            string s;
+            while (std::getline(iss, s, ' '))
+            {
+                initialPartition[curPos] = true;
+                int step = stoi(s);
+                curPos += step;
+            }
+            assert(vertices == curPos); // sum of the sizes of paritions must coincide with the number of vertices
+
+            while (getline(f, line))
+            {
+                if (strncmp(line.c_str(), "c\t", 2) == 0)
+                    continue;
+                vector<vertex_t> initialVertexOrdering;
+                istringstream iss(line);
+                string space_delimiter = " ";
+
+                string s;
+                while (std::getline(iss, s, ' '))
+                {
+                    int l = stoi(s);
+                    initialVertexOrdering.push_back(l);
+                }
+                initialVertexOrderings.push_back(initialVertexOrdering);
+            }
+            continue;
+        }
+
+        if (strcmp("--intervallsColoring", argv[i]) == 0)
+        {
+            assert(vertices != 0); // vertices must be set before partition
+            initialPartition = vector<bool>(vertices, false);
+            int curPos = 0;
+            while (i + 1 < argc && argv[i + 1][0] != '-')
+            {
+                i++;
+                initialPartition[curPos] = true;
+                initialPartition[curPos + 1] = true; // first vertex in own partition
+                int step = atoi(argv[i]);
+                intervallsColoring.push_back(make_pair(curPos, curPos + step));
+                curPos += step;
+            }
+            // assert(vertices - 1 == curPos);  // some of the sizes of paritions must coincide with the number of vertices
+            // initialPartition[curPos] = true; // last vertex is a partition
+
+            // minChromaticNumber = (int)intervallsColoring.size() + 1;
+            continue;
+        }
+
+        if (strcmp("--coloringAlgo", argv[i]) == 0)
+        {
+            i++;
+            coloringAlgo = atoi(argv[i]);
+            continue;
+        }
+
+        if (strcmp("--nonHyperColorable", argv[i]) == 0 || strcmp("--non2h", argv[i]) == 0)
+        {
+            hypercoloring = true;
+            continue;
+        }
+
+        if (strcmp("--nonHyperEdgeColorable", argv[i]) == 0 || strcmp("--nonhec", argv[i]) == 0)
+        {
+            hyperedgeColoring = true;
+            continue;
+        }
+
+        if (strcmp("--non010colorable", argv[i]) == 0 || strcmp("--non010", argv[i]) == 0)
+        {
+            non010colorable = true;
+            triangleVersion = true;
+            continue;
+        }
+
+        if (strcmp("--non010colorableAll", argv[i]) == 0 || strcmp("--non010All", argv[i]) == 0)
+        {
+            non010colorableAll = true;
+            triangleVersion = true;
+            continue;
+        }
+
+        if (strcmp("--triangleVars", argv[i]) == 0)
+        {
+            i++;
+            triangleVars = atoi(argv[i]);
+            continue;
+        }
+
+        if (strcmp("--minChromaticNumber", argv[i]) == 0 || strcmp("-chi", argv[i]) == 0)
+        {
+            i++;
+            minChromaticNumber = atoi(argv[i]);
+            continue;
+        }
+
+        if (strcmp("--minChomaticNumberSubgraph", argv[i]) == 0 || strcmp("-chiS", argv[i]) == 0)
+        {
+            i++;
+            int chi = atoi(argv[i]);
+            i++;
+            int n = atoi(argv[i]); // size
+            minChomaticNumberSubgraph = make_pair(chi, n);
+            continue;
+        }
+
+        if (strcmp("--fixedSubgraphSize", argv[i]) == 0)
+        {
+            i++;
+            fixedSubgraphSize = atoi(argv[i]);
+            continue;
+        }
+
+        if (strcmp("--symClauses", argv[i]) == 0)
+        {
+            i++;
+            symBreakClausesFile = fopen(argv[i], "w");
+            continue;
+        }
+
+        if (strcmp("--coloringClauses", argv[i]) == 0)
+        {
+            i++;
+            addedColoringClauses = fopen(argv[i], "w");
+            continue;
+        }
+
+        if (strcmp("--cubeFile", argv[i]) == 0)
+        {
+            i++;
+            cubeFile = string(argv[i]);
+            continue;
+        }
+
+        if (strcmp("--cube2solve", argv[i]) == 0)
+        {
+            i++;
+            int x = atoi(argv[i]);
+            i++;
+            int y = atoi(argv[i]);
+            rangeCubes = make_pair(x, y);
+            continue;
+        }
+
+        if (strcmp("--clingo", argv[i]) == 0)
+        {
+            i++;
+            optionsClingo = &argv[i];
+            nOptionsClingo = argc - i;
+            break; // all remaining options are feed to clingo!!!!!!
+        }
+
+        if (strcmp("--printFullyDefinedGraphs", argv[i]) == 0)
+        {
+            printFullyDefinedGraphs = true;
+            continue;
+        }
+
+        if (strcmp("--checkComplement", argv[i]) == 0)
+        {
+            checkComplement = true;
+            continue;
+        }
+
+        if (strcmp("--permColorings", argv[i]) == 0)
+        {
+            addPermutedColorings = true;
+            continue;
+        }
+
+        if (strcmp("--fiveCycleVersion", argv[i]) == 0)
+        {
+            fiveCycleVersion = true;
+            continue;
+        }
+
+        if (strcmp("--printFullMatrix", argv[i]) == 0)
+        {
+            printFullMatrix = true;
+            continue;
+        }
+
+        if (strcmp("--hideGraphs", argv[i]) == 0)
+        {
+            hideGraphs = true;
+            continue;
+        }
+
+        if (strcmp("--triangleVersion", argv[i]) == 0)
+        {
+            triangleVersion = true;
+            continue;
+        }
+
+        if (strcmp("--printIntermediateStatistic", argv[i]) == 0)
+        {
+            printIntermediateStatistic = true;
+            continue;
+        }
+
+        if (strcmp("--embeddedStar", argv[i]) == 0)
+        {
+            if (lastVertex == 0)
+                EXIT_UNWANTED_STATE
+            int minDegree, maxDegree;
+            i++;
+            minDegree = atoi(argv[i]);
+            i++;
+            maxDegree = atoi(argv[i]);
+            embeddedStar = make_pair(minDegree, maxDegree);
+
+            // initial parition based on that thing
+            initialPartition = vector<bool>(vertices, false);
+            for (int i = vertices - maxDegree - 1; i < vertices; i++)
+                initialPartition[i] = true; // adjacent to last and last vertex are in a seperate partition
+            // the blocks with the adjacent once to N(last)
+            int remainingDegree = minDegree - 1;
+            int start = lastVertex - maxDegree - remainingDegree * maxDegree;
+            for (int i = lastVertex - maxDegree; i < lastVertex; i++)
+            {
+                int lower = start + (i - (lastVertex - maxDegree)) * remainingDegree;
+                initialPartition[lower] = true;
+            }
+
+            embeddedStarIntervalls = vector<pair<int, pair<int, int>>>(maxDegree);
+            for (int i = vertices - maxDegree - 1; i < lastVertex; i++)
+            {
+                int pos = i - (vertices - maxDegree - 1);
+                embeddedStarIntervalls[pos].first = i;
+                embeddedStarIntervalls[pos].second = make_pair(start + pos * remainingDegree, start + pos * remainingDegree + remainingDegree);
+            }
+            continue;
+        }
+
+        if (strcmp("--cutoff", argv[i]) == 0)
+        {
+            i++;
+            cutoff = atoi(argv[i]);
+            continue;
+        }
+
+        if (strcmp("--turnoffClingo", argv[i]) == 0)
+        {
+            turnoffPropagatorClingo = true;
+            continue;
+        }
+
+        if (strcmp("--turnOffInprocessing", argv[i]) == 0)
+        {
+            turnOffInprocessing = true;
+            continue;
+        }
+
+        if (strcmp("--propagateLiterals", argv[i]) == 0)
+        {
+            propagateLiteralsCadical = true;
+            continue;
+        }
+
+        if (strcmp("--turnoffSMS", argv[i]) == 0)
+        {
+            turnoffSMS = true;
+            continue;
+        }
+
+        if (strcmp("--proof", argv[i]) == 0)
+        {
+            i++;
+            proofFile = string(argv[i]);
+            continue;
+        }
+
+        if (strcmp("--printAddedClauses", argv[i]) == 0)
+        {
+            i++;
+            addedClauses = fopen(argv[i], "w");
+            if (!addedClauses)
+                EXIT_UNWANTED_STATE
+            // fprintf(addedClauses, "p cnf 100000000 100000000\n"); // TODO !!!! doesn't work because remaining clauses are assumed to be empty
+            continue;
+        }
+
+        if (strcmp("--irredundantSymClauses", argv[i]) == 0)
+        {
+            irredundantSymClauses = true;
+            continue;
+        }
+
+        if (strcmp("--combineStaticPlusDynamic", argv[i]) == 0)
+        {
+            combineStaticPlusDynamic = true;
+            continue;
+        }
+
+        printf("ERROR: invalid argument %s\n", argv[i]);
+        EXIT_UNWANTED_STATE
+    }

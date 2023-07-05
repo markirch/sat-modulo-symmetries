@@ -9,6 +9,7 @@ description = "A package for building propositional encodings of graphs. Contain
 authors = [
 	{name = "Markus Kirchweger", email = "markus.kirchweger@ac.tuwien.ac.at"},
 	{name = "Tomáš Peitl", email = "peitl@ac.tuwien.ac.at"},
+	{name = "Manfred Scheucher", email = "scheucher@math.tu-berlin.de"},
 ]
 keywords = ["graphs", "propositional formula", "encoding", "SAT", "CNF"]
 

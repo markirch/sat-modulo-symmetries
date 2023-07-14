@@ -55,6 +55,7 @@ The found graphs are printed to standard output as Python lists of edges. The mo
 - `--vertices n` : search for graph with `n` vertices;
 - `--all-graphs` : enumerate all graphs up to isomorphism satisfying the given properties (without this, the program terminates after finding the first graph);
 - `--directed` : generate directed graphs (default is undirected);
+- `--planar` : generate planar graphs (default is general graphs);
 - `--Delta_upp` : upper bound on the maximum degree;
 - `--delta_low` : lower bound on the minimum degree;
 - `--args_SMS s` : arguments forwarded to either `smsg` or `smsg`, i.e., the string `s` is appended as argument to the command line.

@@ -1,4 +1,5 @@
 #!/bin/bash
+set -e
 
 function msg() {
 	echo -e "\n-- build-and-install-local.sh: $1\n"

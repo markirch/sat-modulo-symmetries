@@ -24,6 +24,7 @@ int fixedSubgraphSize; // for the sake of simplicity i made global variables
 int nextFreeVariableUniversal;
 
 int thickness2Frequency; // frequency for checking whether the graph has indeed thickness 2
+int thickness2FrequencyMultigraph;
 int planarityFrequency;
 int coloringAlgo; // 0 = simple, 1 = DPLL, 2 = SAT
 
@@ -49,6 +50,16 @@ clock_t startOfSolving;
 
 vector<vector<pair<int, int>>> forbiddenSubgraphs; // a list of edge-lists, which give forbidden subgraphs
 bool eliminateAllsubgraphs;
+
+void make_intersection_vars(configSolver &config)
+{
+    config.edges_intersection_graph = vector<vector<lit_t>>(config.b_vertices[1], vector<lit_t>(config.b_vertices[1], 0));
+    for (int i = 0; i < config.b_vertices[1]; i++)
+        for (int j = i + 1; j < config.b_vertices[1]; j++)
+            config.edges_intersection_graph[i][j] = config.edges_intersection_graph[j][i] = minIntersectionVar++;
+
+    config.nextFreeVariable = max(config.nextFreeVariable, minIntersectionVar);
+}
 
 int main(int argc, char const **argv)
 {
@@ -84,7 +95,13 @@ int main(int argc, char const **argv)
       ("print-partial", po::value<int>(&config.printPartiallyDefined), "The frequency with which to print partially defined graphs (0 means never)")
       ("proof", po::value<std::string>(&config.proofFile), "Output a proof to this file")
       ("hypergraph", po::bool_switch(&config.hypermode), "Assume the bipartite graph to represent a hypergraph (changes output format of graphs to python list of sets = hyperedges)")
-      ;
+      ("symClauses", po::value<std::string>()->notifier([&config](const std::string &value)
+        {
+            config.symBreakClausesFile = fopen(value.c_str(), "w");
+            if (!config.symBreakClausesFile) {
+                std::cerr << "Failed to open sym clauses file." << std::endl;
+                std::exit(EXIT_FAILURE);
+        } }), "Set file where symmetry breaking clauses should be stored");
 
     vector<int> initialPartitionArguments;
     po::options_description main_opts{"Main options"};
@@ -105,6 +122,7 @@ int main(int argc, char const **argv)
       ("all-graphs", po::bool_switch(&config.allModels), "Generate all graphs until unsatisfiable (otherwise exit after first solution)")
       ("vertices,v", po::value<int>(&config.vertices), "Generate graphs with this number of vertices")
       ("bipartite,b", po::value<std::vector<int>>()->multitoken(), "Generate bipartite graphs with the specified partition sizes (partitions are non-interchangable). Use this option to generate hypergraphs represented as incidence graphs: the first partition are the vertices, the second are the hyperedges, and adjacency means containment of a vertex in a hyperedge.") // TODO
+      ("multi-graph", po::value<int>(&config.numberOfOverlayingGraphs), "Not only create one graph, but the number of specified graphs")
       ("connected,c", po::bool_switch(&generate_connected), "Generate only connected graphs")
       ("forall", po::value<std::string>()->notifier([&forAllFile](const std::string &value)
                                                            {
@@ -135,6 +153,7 @@ int main(int argc, char const **argv)
       ("combine-static-dynamic", po::bool_switch(&config.combineStaticPlusDynamic), "Combine static with dynamic (SMS) symmetry breaking")
       ("planarity-frequency,planar", po::value<int>(&planarityFrequency), "The frequency with which to call the planarity check (0 means never)")
       ("thickness2", po::value<int>(&thickness2Frequency), "The frequency with which to test thickness two (0 means never)")
+      ("thickness2multi", po::value<int>(&thickness2FrequencyMultigraph), "Frequency in which the second and third graph are tested for planarity")
       ("frequency-connected-components-swap,fc", po::value<int>(&config.frequencyConnectedComponentsSwap), "The frequency with which to call a special minimality check based on analysis of connected components")
 
       // ("intervallsColoring", po::value<std::vector<int>>()->multitoken()->zero_tokens(), "Specify the intervals coloring"); // TODO
@@ -155,8 +174,7 @@ int main(int argc, char const **argv)
           if (values.size() == 2)
               minChomaticNumberSubgraph = std::make_pair(values[0], values[1]); }),
           "The value (k, s) means that the induced subgraph spanned by the vertices 0 .. s-1 should have chromatic number at least k")
-
-      ("fixed-subgraph-size", po::value<int>(&fixedSubgraphSize), "Fix the subgraph on this many lowest vertices (symmetry breaking becomes incomplete)");
+      ("fixed-subgraph-size", po::value<int>(&fixedSubgraphSize), "Disable permuting vertices of the lowest k vertices (symmetry breaking becomes incomplete)");
 
     po::options_description perf_opts{"Performance options"};
 
@@ -330,27 +348,17 @@ int main(int argc, char const **argv)
     cnf_t cnf;
 
 #ifndef DIRECTED
-
     // create new variables
-    config.edges = vector<vector<lit_t>>(vertices, vector<lit_t>(vertices, 0));
-    for (int i = 0; i < vertices; i++)
-        for (int j = i + 1; j < vertices; j++)
-        {
-            config.edges[i][j] = config.edges[j][i] = config.nextFreeVariable++;
-            config.observedVars.push_back(config.edges[i][j]);
-        }
+    if (config.numberOfOverlayingGraphs)
+        make_multi_edge_vars(config);
+    else
+        make_edge_vars(config);
+    make_intersection_vars(config);
 
     if (!useCadical)
         for (int i = 0; i < vertices; i++)
             for (int j = i + 1; j < vertices; j++)
                 cnf.push_back({config.edges[i][j], -config.edges[i][j]}); // trivial clauses but need the variables. TODO find better solution
-
-    config.edges_intersection_graph = vector<vector<lit_t>>(config.b_vertices[1], vector<lit_t>(config.b_vertices[1], 0));
-    for (int i = 0; i < config.b_vertices[1]; i++)
-        for (int j = i + 1; j < config.b_vertices[1]; j++)
-            config.edges_intersection_graph[i][j] = config.edges_intersection_graph[j][i] = minIntersectionVar++;
-
-    config.nextFreeVariable = max(config.nextFreeVariable, minIntersectionVar);
 
     if (!useCadical)
         for (int i = 0; i < config.b_vertices[1]; i++)
@@ -358,15 +366,10 @@ int main(int argc, char const **argv)
                 cnf.push_back({config.edges_intersection_graph[i][j], -config.edges_intersection_graph[i][j]}); // trivial clauses but need the variables. TODO find better solution
 #else
     // create new variables
-    config.edges = vector<vector<lit_t>>(vertices, vector<lit_t>(vertices, 0));
-    for (int i = 0; i < vertices; i++)
-        for (int j = 0; j < vertices; j++)
-        {
-            if (i == j)
-                continue;
-            config.edges[i][j] = config.nextFreeVariable++;
-            config.observedVars.push_back(config.edges[i][j]);
-        }
+    if (config.numberOfOverlayingGraphs)
+        make_multi_edge_vars(config);
+    else
+        make_edge_vars(config);
 
     if (!useCadical)
         for (int i = 0; i < vertices; i++)
@@ -504,6 +507,11 @@ int main(int argc, char const **argv)
     if (thickness2Frequency)
     {
         solver->addPartiallyDefinedGraphChecker(new ThicknessTwoChecker(thickness2Frequency));
+    }
+
+    if (thickness2FrequencyMultigraph)
+    {
+        solver->addPartiallyDefinedMultiGraphChecker(new ThicknessTwoCheckerMulti(thickness2FrequencyMultigraph));
     }
 
     if (minChomaticNumberSubgraph.first)

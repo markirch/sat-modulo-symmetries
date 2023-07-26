@@ -66,6 +66,45 @@ public:
     virtual void checkProperty(const adjacency_matrix_t &matrix) = 0; // { EXIT_UNWANTED_STATE }
 };
 
+class PartiallyDefinedMultiGraphChecker : public GraphChecker
+{
+
+public:
+    int counter = 0; // number of calls since last check
+    int frequency = 30;
+    bool checkFinal = true; // force check for fully defined graphs
+
+    /**
+     * @brief Check partially defined graph and throw partially defined graph which should be forbidden
+     *
+     * @param matrix The current partially defined graph given as adjacency matrix
+     * @param final True if matrix is fully defined
+     */
+    void check(const vector<adjacency_matrix_t> &matrices, bool final)
+    {
+        counter++;
+        if (final && !checkFinal)
+            return;
+        if (counter % frequency != 0 && !final)
+            return;
+        calls++;
+        counter = 0;
+        auto start = clock();
+        try
+        {
+            checkProperty(matrices);
+        }
+        catch (const vector<forbidden_graph_t> forbiddenGraphs)
+        {
+            time += clock() - start;
+            numberOfAddedClauses++;
+            throw forbiddenGraphs;
+        }
+        time += clock() - start;
+    }
+    virtual void checkProperty(const vector<adjacency_matrix_t> &matrices) = 0; // { EXIT_UNWANTED_STATE }
+};
+
 class ComplexPartiallyDefinedGraphChecker : public GraphChecker
 {
 

@@ -14,6 +14,12 @@ typedef struct
     vector<signed_edge_t> clause; // at least one of this edges/non-edges must be present
 } minimalit_check_result_t;
 
+typedef struct
+{
+    vector<int> permutation;
+    vector<vector<signed_edge_t>> clause; // at least one of this edges/non-edges must be present in one of the graphs
+} minimalit_check_result_multi_t;
+
 typedef std::vector<vertex_t> vertex_ordering_t;
 typedef std::vector<bool> partition_t; // if true, then new partition starts
 
@@ -30,23 +36,46 @@ typedef struct
  */
 void checkMinimality(adjacency_matrix_t &adjacency_matrix, vertex_ordering_t vertex_ordering, minimalit_check_config_t config);
 void checkMinimalityComplement(adjacency_matrix_t &adjacency_matrix, vertex_ordering_t vertex_ordering, minimalit_check_config_t config);
+void checkMinimalityMultiple(vector<adjacency_matrix_t> &adjacency_matrices, vertex_ordering_t vertex_ordering, minimalit_check_config_t config);
 
 // basic minimality check with potentially different initial vertexOrderings
 class MinimalityChecker : public PartiallyDefinedGraphChecker
 {
     vector<vertex_ordering_t> vertexOrderings;
     minimalit_check_config_t config;
+    FILE *symBreakClauses;
 public:
-    MinimalityChecker(int frequency, partition_t initial_partition, vector<vertex_ordering_t> vertexOrderings, int cutoff)
+    MinimalityChecker(int frequency, partition_t initial_partition, vector<vertex_ordering_t> vertexOrderings, int cutoff, FILE *symBreakClauses)
     {
         this->name = "MinimalityChecker";
         this->frequency = frequency;
         this->config.initial_partition = initial_partition;
         this->vertexOrderings = vertexOrderings;
         this->config.cutoff = cutoff;
+        this->symBreakClauses = symBreakClauses;
     }
 
     void checkProperty(const adjacency_matrix_t &matrix);
+};
+
+// basic minimality check with potentially different initial vertexOrderings
+class MultipleMinimalityChecker : public PartiallyDefinedMultiGraphChecker
+{
+    vector<vertex_ordering_t> vertexOrderings;
+    minimalit_check_config_t config;
+    FILE *symBreakClauses;
+public:
+    MultipleMinimalityChecker(int frequency, partition_t initial_partition, vector<vertex_ordering_t> vertexOrderings, int cutoff, FILE *symBreakClauses)
+    {
+        this->name = "MinimalityCheckerMulti";
+        this->frequency = frequency;
+        this->config.initial_partition = initial_partition;
+        this->vertexOrderings = vertexOrderings;
+        this->config.cutoff = cutoff;
+        this->symBreakClauses = symBreakClauses;
+    }
+
+    void checkProperty(const vector<adjacency_matrix_t> &matrices);
 };
 
 // basic minimality check with potentially different initial vertexOrderings

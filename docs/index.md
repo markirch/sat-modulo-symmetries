@@ -8,13 +8,14 @@ This SMS package contains the enhanced SAT solvers `smsg` and `smsd` written in 
 ## Requirements
 
 - The SAT solver [Cadical](https://github.com/arminbiere/cadical).
+- The library [Boost](https://www.boost.org/).
 - To install the Python wrapper and encodings, [pip](https://pypi.org/project/pip).
 - [CMake](https://cmake.org)
 
 ## Install (with root privileges)
 
 Currently, only installation on Linux is supported.
-With [Cadical](https://github.com/arminbiere/cadical) installed, SMS can be built and installed as follows: <!---CMake in the usual way, by executing the following commands: -->
+With [CaDiCaL](https://github.com/arminbiere/cadical) and [Boost](https://www.boost.org/) installed, SMS can be built and installed as follows: <!---CMake in the usual way, by executing the following commands: -->
 
 ```bash
 git clone https://github.com/markirch/sat-modulo-symmetries
@@ -55,7 +56,6 @@ The found graphs are printed to standard output as Python lists of edges. The mo
 - `--vertices n` : search for graph with `n` vertices;
 - `--all-graphs` : enumerate all graphs up to isomorphism satisfying the given properties (without this, the program terminates after finding the first graph);
 - `--directed` : generate directed graphs (default is undirected);
-- `--planar` : generate planar graphs (default is general graphs);
 - `--Delta_upp` : upper bound on the maximum degree;
 - `--delta_low` : lower bound on the minimum degree;
 - `--args_SMS s` : arguments forwarded to either `smsg` or `smsg`, i.e., the string `s` is appended as argument to the command line.

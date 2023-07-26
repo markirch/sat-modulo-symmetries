@@ -10,7 +10,7 @@ set(sources "minimalityCheckCommon.cpp" "solver.cpp" "solveCadicalClass.cpp" "us
 set(clingo_wrapper "solveClingoClass.cpp")
 set(glasgow_wrapper "glasgow_wrapper.cpp")
 
-set(cadical_static_lib "${CMAKE_CURRENT_SOURCE_DIR}/../cadical-internal-theory-propagation/build/libcadical.a")
+set(cadical_static_lib "${CMAKE_CURRENT_SOURCE_DIR}/../cadical-master/build/libcadical.a")
 link_libraries("${cadical_static_lib}")
 
 # -O3 not needed, because it is implied by CMAKE_BUILD_TYPE=Release (which is the default)
@@ -31,9 +31,9 @@ add_executable(smsd ${sources} "minimalityCheck_dir.cpp" "main.cpp")
 
 target_compile_definitions(smsd PRIVATE DIRECTED)
 
-add_library(ipasir ${sources})
+add_library(ipasir "minimalityCheck.cpp" ${sources})
 
-install(TARGETS smsg smsd)
+install(TARGETS smsg smsd ipasir)
 
 # commands for adding Z3
 # target_include_directories(graphgen PRIVATE ${Z3_CXX_INCLUDE_DIRS})

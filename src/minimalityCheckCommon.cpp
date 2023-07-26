@@ -25,7 +25,66 @@ void MinimalityChecker::checkProperty(const adjacency_matrix_t &matrix)
                 signedEdges[i].first = truth_value_false;
             else
                 signedEdges[i].first = truth_value_true;
+
+        if (symBreakClauses)
+        {
+            for (size_t i = 0; i < signedEdges.size(); i++)
+                fprintf(symBreakClauses, "%s(%d,%d) ", signedEdges[i].first == truth_value_true ? "-" : "", signedEdges[i].second.first, signedEdges[i].second.second);
+            fprintf(symBreakClauses, "\n");
+        }
         throw signedEdges;
+    }
+}
+
+void MultipleMinimalityChecker::checkProperty(const vector<adjacency_matrix_t> &matrices)
+{
+    try
+    {
+        for (auto ordering : vertexOrderings)
+        {
+            auto matrixCopy = matrices;
+            checkMinimalityMultiple(matrixCopy, ordering, config); // intial partition and vertex ordering are not changed
+        }
+    }
+    catch (LimitReachedException e)
+    {
+        printf("Limit reached\n");
+    }
+    catch (minimalit_check_result_multi_t e)
+    {
+        vector<forbidden_graph_t> signedEdgesMulti = e.clause;
+        // printf("Graph checked for minimality BEFORE!!:\n");
+        // for (int m = 0; m < matrices.size(); m++)
+        // {
+        //     printf("Layer %d\n", m);
+        //     printAdjacencyMatrix(matrices[0], true);
+        // }
+        // printf("Forbidden:\n");
+        // for (int m = 0; m < matrices.size(); m++)
+        // {
+        //     printf("Layer %d\n", m);
+        //     for (size_t i = 0; i < signedEdgesMulti[m].size(); i++)
+        //         if (signedEdgesMulti[m][i].first == truth_value_true)
+        //             printf("(%d,%d) ", signedEdgesMulti[m][i].second.first, signedEdgesMulti[m][i].second.second);
+        //         else
+        //             printf("-(%d,%d) ", signedEdgesMulti[m][i].second.first, signedEdgesMulti[m][i].second.second);
+        //     printf("\n");
+        // }
+
+        // TODO currently flipped edges but later replace it in the minimality check itself
+        // flip sign of all the edges
+        for (int m = 0; m < (int) matrices.size(); m++) // flip for all of them separately
+            for (size_t i = 0; i < signedEdgesMulti[m].size(); i++)
+                if (signedEdgesMulti[m][i].first == truth_value_true)
+                    signedEdgesMulti[m][i].first = truth_value_false;
+                else
+                    signedEdgesMulti[m][i].first = truth_value_true;
+
+        if (symBreakClauses)
+        {
+            EXIT_UNWANTED_STATE // TODO implement
+        }
+        throw signedEdgesMulti;
     }
 }
 
@@ -37,8 +96,8 @@ void MaximalityChecker::checkProperty(const adjacency_matrix_t &matrix)
         for (auto ordering : vertexOrderings)
         {
             auto matrixCopy = matrix;
-            for (int i = 0; i < (int) matrix.size(); i++)
-                for (int j = 0; j < (int) matrix.size(); j++)
+            for (int i = 0; i < (int)matrix.size(); i++)
+                for (int j = 0; j < (int)matrix.size(); j++)
                 {
                     if (matrix[i][j] == truth_value_true)
                         matrixCopy[i][j] = truth_value_false;
@@ -77,7 +136,7 @@ void MinimalityCheckerWithStaticPartition::checkProperty(const adjacency_matrix_
 {
     try
     {
-        int vertices = (int) matrix.size();
+        int vertices = (int)matrix.size();
         partition_t initialPartition = vector<bool>(vertices, false);
         initialPartition[0] = true;
         for (int v = 1; v < vertices; v++)
@@ -115,7 +174,7 @@ void MinimalityCheckerWithStaticPartition::checkProperty(const adjacency_matrix_
                 clause.push_back(edges[edge.first][edge.second]); // TODO check if plus or minus
             }
 
-        for (int v = 0; v < (int) matrix.size(); v++)
+        for (int v = 0; v < (int)matrix.size(); v++)
         {
             if (e.permutation[v] != v)
                 clause.push_back(-staticParitionVars[v][e.permutation[v]]);
@@ -125,7 +184,6 @@ void MinimalityCheckerWithStaticPartition::checkProperty(const adjacency_matrix_
         throw clauses;
     }
 }
-
 
 // TODO swaps with colorings and connected components
 /*
@@ -187,7 +245,7 @@ bool checkSwaps(adjacency_matrix_t &matrix)
                 // {
                 //     printf("Could be discarded %d %d; %d %d !!!\n", ni, nj, i, j);
                 //     return false;
-                // } 
+                // }
 
                 if (ni == nj && ni != intervallsColoring[i].second - intervallsColoring[i].first) // check connected components if not all vertices
                 {

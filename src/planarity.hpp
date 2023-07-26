@@ -40,4 +40,17 @@ public:
     void checkProperty(const adjacency_matrix_t &matrix);
 };
 
+class ThicknessTwoCheckerMulti : public PartiallyDefinedMultiGraphChecker
+{
+public:
+    ThicknessTwoCheckerMulti(int frequency)
+    {
+        this->name = "ThicknessTwoCheckerMulti";
+        this->frequency = frequency;
+    }
+    void checkProperty(const vector<adjacency_matrix_t> &matrices);
+};
+
+
+
 #endif

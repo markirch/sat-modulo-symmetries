@@ -9,8 +9,6 @@
 class CadicalSolver : public GraphSolver, public CaDiCaL::ExternalPropagator
 {
 private:
-    CaDiCaL::Solver *solver;
-    CaDiCaL::Solver *universalSolver;
     bool redundant;
 
     bool changeInTrail = true; // checks whether the trail has changed since the last propagation step
@@ -31,14 +29,16 @@ private:
     void init(configSolver config, cnf_t &cnf);
 
 public:
+    CaDiCaL::Solver *solver;
+    CaDiCaL::Solver *universalSolver;
     CadicalSolver(configSolver config);
     CadicalSolver(configSolver config, cnf_t &cnf);
     ~CadicalSolver() { solver->disconnect_external_propagator(); }
 
-protected: // virtual classes from common interface
-    void solve(vector<int> assumptions);
+    bool solve(vector<int> assumptions);
     bool solve(vector<int> assumptions, int timeout);
 
+protected: // virtual classes from common interface
     adjacency_matrix_t getAdjacencyMatrix()
     {
         // printf("Trail: ");
@@ -81,6 +81,27 @@ protected: // virtual classes from common interface
             // printAdjacencyMatrix(matrix);
             return matrix;
         }
+    }
+
+    vector<adjacency_matrix_t> getAdjacencyMatrixMultiple()
+    {
+        // printf("Trail: ");
+        // for (auto lit: *current_trail)
+        //     printf("%d ", lit);
+        // printf("\n");
+        int nMatrices = config.edgesMultiple.size();
+        vector<adjacency_matrix_t> matrices(nMatrices, adjacency_matrix_t(vertices, vector<truth_value_t>(vertices, truth_value_unknown)));
+#ifndef DIRECTED
+        for (int n = 0; n < nMatrices; n++)
+            for (int i = 0; i < vertices; i++)
+                for (int j = i + 1; j < vertices; j++)
+                    matrices[n][i][j] = matrices[n][j][i] = currentAssigment[config.edgesMultiple[n][i][j]];
+#else
+        EXIT_UNWANTED_STATE // not supported yet
+#endif
+        // printFullMatrix = true;
+        // printAdjacencyMatrix(matrix);
+        return matrices;
     }
 
     vector<truth_value_t> &getCurrentAssignemnt() { return currentAssigment; }

@@ -11,7 +11,7 @@ class KSGraphEncodingBuilder(GraphEncodingBuilder):
         for i, j, k in combinations(self.V, 3):
             self.CNF_AND_APPEND([self.var_edge(i, j), self.var_edge(j, k), self.var_edge(i, k)], self.triangleVariables[(i, j, k)])  # ensure that true iff it is a triangle
 
-        self.paramsSMS["triangleVars"] = self.triangleVariables[(0, 1, 2)]
+        self.paramsSMS["triangle-vars"] = self.triangleVariables[(0, 1, 2)]
         self.paramsSMS["non010"] = ""
         self.paramsSMS["frequency"] = 30
         # self.paramsSMS["forbiddenSubgraphs"] = "./unembeddableSmall.txt"
@@ -34,14 +34,14 @@ class KSGraphEncodingBuilder(GraphEncodingBuilder):
 
     def add_constraints_by_arguments(self, args):
         super().add_constraints_by_arguments(args)
-        if args.edgeInTriangle:
+        if args.edge_in_triangle:
             self.eachEdgeInTriangle()
 
 
 if __name__ == "__main__":
     parser = getDefaultParser()
-    parser.add_argument("--edgeInTriangle", action="store_true", help="Ensure that each edge is in a triangle")
+    parser.add_argument("--edge_in_triangle", action="store_true", help="Ensure that each edge is in a triangle")
     args = parser.parse_args()
-    g = KSGraphEncodingBuilder(args.vertices, staticInitialPartition=args.staticInitialPartition)
+    g = KSGraphEncodingBuilder(args.vertices, staticInitialPartition=args.static_partition)
     g.add_constraints_by_arguments(args)
     g.solveArgs(args)

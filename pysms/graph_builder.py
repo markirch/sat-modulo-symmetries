@@ -20,6 +20,7 @@ def getDefaultParser():
     main_args.add_argument("--vertices", "-v", type=int, required=True, help="number of vertices")
     main_args.add_argument("--cnf-file", type=str, help="store the generated encoding here")
     main_args.add_argument("--directed", "-d", action="store_true", help="search for directed graphs")
+    main_args.add_argument("--multigraph", "-m", type=int, help="search for a multigraph")
     main_args.add_argument("--underlying-graph", action="store_true", help="consider the underlying undirected graph for directed graphs")
     main_args.add_argument("--static-partition", action="store_true", help="specify a statically enforced partial vertex ordering (respected by SMS)")
     main_args.add_argument("--counter", choices=["sequential", "totalizer"], default="sequential", help="the CNF encoding for cardinality constraints")
@@ -94,7 +95,7 @@ class GraphEncodingBuilder(IDPool, list):
     """A class for building an encoding in the context of SMS.
     The IDPool gives the next free variable whilst the list contains the clauses"""
 
-    def __init__(self, n, directed=False, staticInitialPartition=False, underlyingGraph=False):
+    def __init__(self, n, directed=False, multiGraph=None, staticInitialPartition=False, underlyingGraph=False):
         super().__init__()
         self.directed = directed
         self.V = list(range(n))
@@ -109,6 +110,13 @@ class GraphEncodingBuilder(IDPool, list):
             self.varEdgeDirectedTable = [[None for _ in self.V] for _ in self.V]
             for v, u in permutations(self.V, 2):
                 self.varEdgeDirectedTable[v][u] = self.id()
+        elif multiGraph:
+            self.paramsSMS["multi-graph"] = multiGraph
+            self.varEdgeMultiTable = [[[None for _ in self.V] for _ in self.V] for _ in range(multiGraph)]
+            for i in range(multiGraph):
+                for v, u in combinations(self.V, 2):
+                    self.varEdgeMultiTable[i][v][u] = self.varEdgeMultiTable[i][u][v] = self.id()
+            self.varEdgeTable = self.varEdgeMultiTable[0]  # allows arguing over the first graph
         else:
             self.varEdgeTable = [[None for _ in self.V] for _ in self.V]
             for v, u in combinations(self.V, 2):
@@ -138,6 +146,10 @@ class GraphEncodingBuilder(IDPool, list):
         """Get the propositional variable associated with the undirected edge {u,v}"""
         return self.varEdgeTable[u][v]
 
+    def var_edge_multi(self, i, u, v) -> int:
+        """Get the propositional variable associated with the undirected edge {u,v} of the i-th graph"""
+        return self.varEdgeMultiTable[i][u][v]
+
     def var_edge_dir(self, u, v) -> int:
         """Get the propositional variable associated with the directed edge (u,v)"""
         return self.varEdgeDirectedTable[u][v]
@@ -149,7 +161,7 @@ class GraphEncodingBuilder(IDPool, list):
     def solve(self, allGraphs=False, hideGraphs=False, cnfFile=None, args_SMS=""):
         """Solve the formula, given the encoding, using SMS."""
         if cnfFile == None:
-            cnfFile = f"./temp{os.getpid()}.enc" #TODO use tempfile module
+            cnfFile = f"./temp{os.getpid()}.enc"  # TODO use tempfile module
         self.print_dimacs(cnfFile)  # write script to temporary file
 
         program = "smsd" if self.directed else "smsg"  # we expect these binaries to be on PATH
@@ -169,6 +181,7 @@ class GraphEncodingBuilder(IDPool, list):
 
         if self.DEBUG:
             print("running the command: ", sms_command)
+        stdout.flush()
         os.system(sms_command)
         os.system(f"rm {cnfFile}")
 
@@ -214,6 +227,7 @@ class GraphEncodingBuilder(IDPool, list):
         g = self
         if g.DEBUG:
             print("Arguments:", args)
+            stdout.flush()
         if args.Delta_upp:
             self.maxDegree(args.Delta_upp, args.counter)
         if args.delta_low:
@@ -233,7 +247,7 @@ class GraphEncodingBuilder(IDPool, list):
             self.minGirthCompact(args.girth_compact)
 
         if args.alpha_upp:
-            self(args.alpha_upp)
+            self.maxIndependentSet(args.alpha_upp)
         if args.omega_upp:
             self.maxClique(args.omega_upp)
         if args.ramsey:
@@ -262,7 +276,7 @@ class GraphEncodingBuilder(IDPool, list):
 
         if args.even_degrees:
             for u in self.V:
-                shouldBe([+self.var_edge(u,v) for v in self.V if v != u], [i for i in self.V if i%2 == 0], self, self, type=DEFAULT_COUNTER)
+                shouldBe([+self.var_edge(u, v) for v in self.V if v != u], [i for i in self.V if i % 2 == 0], self, self, type=DEFAULT_COUNTER)
 
     # ------------degree encodings--------------
 
@@ -416,7 +430,7 @@ class GraphEncodingBuilder(IDPool, list):
                 continue
             if cycle[1] > cycle[-1]:
                 continue
-            g.append([-g.var_edge(cycle[i], cycle[(i+1)%k]) for i in range(k)])  # at least one edge absent from potential cycle
+            g.append([-g.var_edge(cycle[i], cycle[(i + 1) % k]) for i in range(k)])  # at least one edge absent from potential cycle
 
     def minGirth(self, k):
         """Basic encoding to ensure that the girth is at least k, i.e., no cycle with length < k"""
@@ -493,6 +507,6 @@ class GraphEncodingBuilder(IDPool, list):
 
 if __name__ == "__main__":
     args = getDefaultParser().parse_args()
-    b = GraphEncodingBuilder(args.vertices, directed=args.directed, staticInitialPartition=args.static_partition, underlyingGraph=args.underlying_graph)
+    b = GraphEncodingBuilder(args.vertices, directed=args.directed, multiGraph=args.multigraph, staticInitialPartition=args.static_partition, underlyingGraph=args.underlying_graph)
     b.add_constraints_by_arguments(args)
     b.solveArgs(args)

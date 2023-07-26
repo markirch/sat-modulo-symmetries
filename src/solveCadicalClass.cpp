@@ -83,8 +83,9 @@ CadicalSolver::CadicalSolver(configSolver config) : GraphSolver(config)
     init(config, cnf);
 }
 
-void CadicalSolver::solve(vector<int> assumptions)
+bool CadicalSolver::solve(vector<int> assumptions)
 {
+    initEdgeMemory();
     do
     {
         for (auto lit : assumptions)
@@ -99,14 +100,14 @@ void CadicalSolver::solve(vector<int> assumptions)
 
         int res = solver->solve();
         if (res == 20) // not
-            break;
+            return false;
         if (res != 10)
         {
             EXIT_UNWANTED_STATE // TODO just to be sure for know
         }
 
         if (check_solution()) // true if no clause was added
-            break;
+            return true;
     } while (true);
 }
 

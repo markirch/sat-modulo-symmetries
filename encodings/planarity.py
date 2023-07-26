@@ -152,8 +152,7 @@ class PlanarGraphBuilder(GraphEncodingBuilder):
             planarity_universal(self.V, self.var_edge, self, self)
 
         if args.earthmoon:
-            assert(args.directed)
-            self.paramsSMS["chi"] = args.earthmoon # set min chromatic number
+            assert args.directed
             self.paramsSMS["frequency"] = 30
             V = self.V
             var_edge = self.var_edge_dir
@@ -171,6 +170,18 @@ class PlanarGraphBuilder(GraphEncodingBuilder):
                 G2[v][u] = G2[u][v] = self.id()
                 self.CNF_AND_APPEND([+var_edge(u, v), -var_edge(v, u)], G2[v][u])  # edge in G2 if single edge in lower half
 
+            # explicitely ensure at least a certain minimum chromatic number
+            chi = args.earthmoon
+            from more_itertools import set_partitions
+
+            for coloring in set_partitions(self.V, chi - 1):
+                # print(x)
+                clause = []  # monochromatic edge
+                for color in coloring:
+                    clause.extend([G[v][u] for v, u in combinations(color, 2)])
+                self.append(clause)
+            # self.paramsSMS["chi"] = args.earthmoon # set min chromatic number within propagator
+
             # only single edges in lower triangle matrix; i.e., if edge in upper than also in lower
             for v, u in combinations(V, 2):
                 self.append([-var_edge(v, u), +var_edge(u, v)])  # if one upper half than also on lower half
@@ -182,7 +193,6 @@ class PlanarGraphBuilder(GraphEncodingBuilder):
                 self.counterFunction([G1[i][j] for i, j in combinations(V, 2)], countUpto=edgesInTriangulation, atMost=edgesInTriangulation, atLeast=edgesInTriangulation)
                 self.counterFunction([G2[i][j] for i, j in combinations(V, 2)], countUpto=edgesInTriangulation, atMost=edgesInTriangulation)
 
-
             # graphs given by each direction (upper and lower triangular) must be planar
             if False:
                 planar_encoding_schnyder(V, lambda v, u: G1[v][u], self, self)
@@ -193,31 +203,30 @@ class PlanarGraphBuilder(GraphEncodingBuilder):
                 self.counterFunction([G[i][j] for j in V if j != i], countUpto=args.earthmoon - 1, atLeast=args.earthmoon - 1)
 
             # forbid some trivial cases
-            for A in combinations(V,5):
-                self.append([-G1[i][j] for i,j in combinations(A,2)])
-                self.append([-G2[i][j] for i,j in combinations(A,2)])
+            for A in combinations(V, 5):
+                self.append([-G1[i][j] for i, j in combinations(A, 2)])
+                self.append([-G2[i][j] for i, j in combinations(A, 2)])
 
-            for A in combinations(V,6):
-                for B in combinations(A,3):
+            for A in combinations(V, 6):
+                for B in combinations(A, 3):
                     if min(A) not in B:
                         continue
                     self.append([-G1[i][j] for i in set(A) - set(B) for j in B])
                     self.append([-G2[i][j] for i in set(A) - set(B) for j in B])
-
 
         if args.earthmoon_candidate1 or args.earthmoon_candidate2:
             partition = []
             E = []
             if args.earthmoon_candidate1:
                 # C5[4, 4, 4, 4, 3]
-                assert(self.n == 19)
-                assert(self.directed)
+                assert self.n == 19
+                assert self.directed
                 partition = [[0, 1, 2, 3], [4, 5, 6, 7], [8, 9, 10, 11], [12, 13, 14, 15], [16, 17, 18]]
 
             if args.earthmoon_candidate2:
                 # C_7 where each vertex is replaced by K4s and joining neighborhoods
-                assert(self.n == 28)
-                assert(self.directed)
+                assert self.n == 28
+                assert self.directed
                 for i in range(7):
                     partition.append(list(range(4 * i, 4 * (i + 1))))
 
@@ -232,7 +241,7 @@ class PlanarGraphBuilder(GraphEncodingBuilder):
                 for v in partition[-1]:
                     E.append((u, v))
 
-            #print(E)
+            # print(E)
             for i, j in E:
                 self.append([self.var_edge_dir(j, i)])
 
@@ -242,10 +251,10 @@ class PlanarGraphBuilder(GraphEncodingBuilder):
                     self.append([-self.var_edge_dir(j, i)])
 
             self.paramsSMS["thickness2"] = "5"
-            self.paramsSMS["initialPartition"] = " ".join(map(str, map(len, partition)))
+            self.paramsSMS["initial-partition"] = " ".join(map(str, map(len, partition)))
 
 
 args = getPlanarParser().parse_args()
-b = PlanarGraphBuilder(args.vertices, directed=args.directed, staticInitialPartition=args.staticInitialPartition, underlyingGraph=args.underlyingGraph)
+b = PlanarGraphBuilder(args.vertices, directed=args.directed, staticInitialPartition=args.static_partition, underlyingGraph=args.underlying_graph)
 b.add_constraints_by_arguments(args)
 b.solveArgs(args)

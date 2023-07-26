@@ -208,6 +208,38 @@ bool GraphSolver::checkPartiallyDefined(bool isFullyDefined)
     return false;
   }
 
+  try
+  {
+    for (auto checker : this->partiallyDefinedMultiGraphCheckers)
+    {
+      checker->check(getAdjacencyMatrixMultiple(), isFullyDefined);
+    }
+  }
+  catch (const vector<forbidden_graph_t> forbiddenGraphs)
+  {
+    // trnsform forbidden subgraph into a clause, which blocks this graph
+    clause_t clause;
+    for (int i = 0; i < (int)forbiddenGraphs.size(); i++)
+    {
+      auto forbiddenGraph = forbiddenGraphs[i];
+      for (auto signedEdge : forbiddenGraph)
+      {
+        auto edge = signedEdge.second;
+        if (signedEdge.first == truth_value_true)
+        {
+          clause.push_back(-config.edgesMultiple[i][edge.first][edge.second]); // multiedges
+        }
+        else // assum that not truth_value_unknown
+        {
+          clause.push_back(config.edgesMultiple[i][edge.first][edge.second]);
+        }
+      }
+    }
+
+    addClause(clause, false); // TODO eventually vector with checkers which are redundant and which are not; only makes sense when supported by Cadical
+    return false;
+  }
+
   return true;
 }
 
@@ -292,7 +324,17 @@ bool GraphSolver::check()
   {
 
     printf("Solution %d\n", nModels);
-    if (config.hypermode)
+    if (config.numberOfOverlayingGraphs)
+    {
+      auto multiGraph = getAdjacencyMatrixMultiple();
+      int layer = 0;
+      for (auto m : multiGraph)
+      {
+        printf("Layer %d:\n", layer++);
+        printAdjacencyMatrix(m, config.printFullMatrix);
+      }
+    }
+    else if (config.hypermode)
     {
       printHypergraph(matrix, config.b_vertices);
     }
@@ -325,14 +367,30 @@ bool GraphSolver::check()
     }
 
 #ifndef DIRECTED
-    for (int i = 0; i < vertices; i++)
-      for (int j = i + 1; j < vertices; j++)
-        if (m[i][j] == truth_value_true)
-          clause.push_back(-edges[i][j]);
-        else if (m[i][j] == truth_value_false)
-          clause.push_back(edges[i][j]);
-        else
-          EXIT_UNWANTED_STATE
+    if (config.numberOfOverlayingGraphs)
+    {
+      auto multiGraph = getAdjacencyMatrixMultiple();
+      for (int a = 0; a < (int)multiGraph.size(); a++)
+        for (int i = 0; i < vertices; i++)
+          for (int j = i + 1; j < vertices; j++)
+            if (multiGraph[a][i][j] == truth_value_true)
+              clause.push_back(-config.edgesMultiple[a][i][j]);
+            else if (multiGraph[a][i][j] == truth_value_false)
+              clause.push_back(config.edgesMultiple[a][i][j]);
+            else
+              EXIT_UNWANTED_STATE
+    }
+    else
+    {
+      for (int i = 0; i < vertices; i++)
+        for (int j = i + 1; j < vertices; j++)
+          if (m[i][j] == truth_value_true)
+            clause.push_back(-edges[i][j]);
+          else if (m[i][j] == truth_value_false)
+            clause.push_back(edges[i][j]);
+          else
+            EXIT_UNWANTED_STATE
+    }
     addClause(clause, false);
     return false;
 #else
@@ -371,12 +429,14 @@ void GraphSolver::printStatistics()
   allCheckers.insert(allCheckers.end(), complexPartiallyDefinedGraphCheckers.begin(), complexPartiallyDefinedGraphCheckers.end());
   allCheckers.insert(allCheckers.end(), fullyDefinedGraphCheckers.begin(), fullyDefinedGraphCheckers.end());
   allCheckers.insert(allCheckers.end(), complexFullyDefinedGraphCheckers.begin(), complexFullyDefinedGraphCheckers.end());
+  allCheckers.insert(allCheckers.end(), partiallyDefinedMultiGraphCheckers.begin(), partiallyDefinedMultiGraphCheckers.end());
   for (auto checker : allCheckers)
     checker->printStats();
 }
 
-void GraphSolver::solve()
+bool GraphSolver::solve()
 {
+  bool rv = false;
   // solve
   if (!config.quiet)
   {
@@ -429,7 +489,7 @@ void GraphSolver::solve()
       }
       else
       {
-        solve(assumptions);
+        rv = solve(assumptions);
       }
       if (solvedSuccessfully)
         printf("Time for cube %f\n", ((double)clock() - start) / CLOCKS_PER_SEC);
@@ -449,7 +509,7 @@ void GraphSolver::solve()
     }
     else
     {
-      solve(vector<int>());
+      rv = solve(vector<int>());
     }
 
     if (!config.quiet)
@@ -458,6 +518,7 @@ void GraphSolver::solve()
       printStatistics();
     }
   }
+  return rv;
 }
 
 void GraphSolver::initEdgeMemory()
@@ -659,3 +720,75 @@ void GraphSolver::recordGraphStats(const adjacency_matrix_t &matrix)
     }
   }
 }
+
+#ifndef DIRECTED
+void make_edge_vars(configSolver &config)
+{
+  config.edges = vector<vector<lit_t>>(config.vertices, vector<lit_t>(config.vertices, 0));
+  for (int i = 0; i < config.vertices; i++)
+    for (int j = i + 1; j < config.vertices; j++)
+    {
+      config.edges[i][j] = config.edges[j][i] = config.nextFreeVariable++;
+      config.observedVars.push_back(config.edges[i][j]);
+    }
+}
+
+void make_multi_edge_vars(configSolver &config)
+{
+  if (config.numberOfOverlayingGraphs)
+  {
+    for (int x = 0; x < config.numberOfOverlayingGraphs; x++)
+    {
+      auto edges = vector<vector<lit_t>>(config.vertices, vector<lit_t>(config.vertices, 0));
+      for (int i = 0; i < config.vertices; i++)
+        for (int j = i + 1; j < config.vertices; j++)
+        {
+          edges[i][j] = edges[j][i] = config.nextFreeVariable++;
+          config.observedVars.push_back(edges[i][j]);
+        }
+
+      config.edgesMultiple.push_back(edges);
+      if (x == 0)
+        config.edges = edges; // dirty fix to avoid many ifs
+    }
+  }
+}
+
+#else
+void make_edge_vars(configSolver &config)
+{
+  config.edges = vector<vector<lit_t>>(config.vertices, vector<lit_t>(config.vertices, 0));
+  for (int i = 0; i < config.vertices; i++)
+    for (int j = 0; j < config.vertices; j++)
+    {
+      if (i == j)
+        continue;
+      config.edges[i][j] = config.nextFreeVariable++;
+      config.observedVars.push_back(config.edges[i][j]);
+    }
+}
+
+void make_multi_edge_vars(configSolver &config)
+{
+  if (config.numberOfOverlayingGraphs)
+  {
+    for (int x = 0; x < config.numberOfOverlayingGraphs; x++)
+    {
+      auto edges = vector<vector<lit_t>>(config.vertices, vector<lit_t>(config.vertices, 0));
+      for (int i = 0; i < config.vertices; i++)
+        for (int j = 0; j < config.vertices; j++)
+        {
+          if (i == j)
+            continue;
+          config.edges[i][j] = config.nextFreeVariable++;
+          config.observedVars.push_back(config.edges[i][j]);
+        }
+
+      config.edgesMultiple.push_back(edges);
+      if (x == 0)
+        config.edges = edges; // dirty fix to avoid many ifs
+    }
+  }
+}
+
+#endif

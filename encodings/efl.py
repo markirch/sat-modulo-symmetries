@@ -36,7 +36,7 @@ class EFL(IncidenceMatrixBuilder):
         self.paramsSMS["min-intersection-var"] = self.edge_vars_intersection[(0, 1)]  # set integer where intersection variables start
         self.paramsSMS["cutoff"] = 200000
         self.paramsSMS["hypergraph"] = ""
-        self.paramsSMS["coloring-algo"] = 2 # use a CDCL solver for coloring
+        self.paramsSMS["coloring-algo"] = 2  # use a CDCL solver for coloring
 
         self.hyperedges_share_vertex_v = [
             [[self.CNF_AND([self.edge_contains_vertex(e1, v), self.edge_contains_vertex(e2, v)]) if e1 < e2 else None for v in V] for e2 in E] for e1 in E
@@ -168,17 +168,17 @@ class EFL(IncidenceMatrixBuilder):
         # --------------------------------------arguments related to the chromatic index--------------------------------------
         if args.intersectionMinDegree:
             for i in E:
-                self.counterFunction([self.var_edge_intersection_graph(i, j) for j in E if j != i], countUpto=intersectionMinDegree, atLeast=intersectionMinDegree)
+                self.counterFunction([self.var_edge_intersection_graph(i, j) for j in E if j != i], countUpto=args.intersectionMinDegree, atLeast=args.intersectionMinDegree)
 
         if args.intersectionMinDegreeLarge:
             for i in E:
-                counter_intersections = self.counterFunction([self.var_edge_intersection_graph(i, j) for j in E if j != i], countUpto=intersectionMinDegreeLarge)
+                counter_intersections = self.counterFunction([self.var_edge_intersection_graph(i, j) for j in E if j != i], countUpto=args.intersectionMinDegreeLarge)
                 counter_incidence_graph = self.counterFunction(
                     [self.edge_contains_vertex(i, v) for v in V],
                     countUpto=3,
                 )
                 # if at least 3 neighbors in the incidence graph (hyperedge size at least 3), then intersection degree at least as requested
-                self.append([-counter_incidence_graph[3 - 1], +counter_intersections[intersectionMinDegreeLarge - 1]])
+                self.append([-counter_incidence_graph[3 - 1], +counter_intersections[args.intersectionMinDegreeLarge - 1]])
 
         if args.selectCriticalSubgraph:
             # select a subgraph which is critical
@@ -256,23 +256,34 @@ class EFL(IncidenceMatrixBuilder):
                 # TODO smaller colors must not be available by previous vertices
 
 
-
 if __name__ == "__main__":
     parser = getParserIncidence()
     parser.add_argument("--intersectionMinDegree", type=int, help="Request that each hyperedge intersects at least this many other hyperedges (holds whenever the intersection graph is critical).")
-    parser.add_argument("--intersectionMinDegreeLarge", type=int, help="Request that each large hyperedge (with at least 3 vertices) intersects at least this many other hyperedges (holds whenever the intersection graph contains a critical subgraph with all large hyperedges).")
-    parser.add_argument("--selectCriticalSubgraph", type=int, help="Explicitly select a critical subgraph (for the given number of colors) of the intersection graph. The selected subgraph is required to contain all large hyperedges.")
+    parser.add_argument(
+        "--intersectionMinDegreeLarge",
+        type=int,
+        help="Request that each large hyperedge (with at least 3 vertices) intersects at least this many other hyperedges (holds whenever the intersection graph contains a critical subgraph with all large hyperedges).",
+    )
+    parser.add_argument(
+        "--selectCriticalSubgraph",
+        type=int,
+        help="Explicitly select a critical subgraph (for the given number of colors) of the intersection graph. The selected subgraph is required to contain all large hyperedges.",
+    )
     parser.add_argument("--differentNeighborhood", help="Ensure that no hyperedge is a subset of another hyperedge", action="store_true")
     parser.add_argument("--critical", help="deleting any hyperedge decreases the chromatic index", action="store_true")
     # parser.add_argument('--primary', choices=["graph", "hypergraph"], help="choose which object SMS should operate on: the original linear hypergraph, or the intersection graph derived from it", default="graph")
-    #parser.add_argument("--rowSwapStatic", action="store_true", help="Add a partial static symmetry breaking constraint that says that swapping any two consecutive rows (or columns) doesn't make the matrix lexicographically smaller")
+    # parser.add_argument("--rowSwapStatic", action="store_true", help="Add a partial static symmetry breaking constraint that says that swapping any two consecutive rows (or columns) doesn't make the matrix lexicographically smaller")
     parser.add_argument("--hindman", action="store_true", help="The union of large hyperedges must have size at least 11 (Hindman proved in 1981 that otherwise the EFL conjecture holds)")
     parser.add_argument("--maxClosedNeighborhood", type=int, help="The maximum size of the closed neighborhood (= union of containing hyperedges) of a vertex in the hypergraph")
-    parser.add_argument("--neighborhoodMaximal", action="store_true", help="Request that the hypergraph be maximal with respect to closed neighborhood size (adding any hyperedge violates the neighborhood size constraint)")
+    parser.add_argument(
+        "--neighborhoodMaximal",
+        action="store_true",
+        help="Request that the hypergraph be maximal with respect to closed neighborhood size (adding any hyperedge violates the neighborhood size constraint)",
+    )
     parser.add_argument("--deactivateCovering", help="Admit non-covered hypergraphs (covered = each pair of vertices is contained in some hyperedge)", action="store_true", default=False)
     parser.add_argument("--vizing", type=int, help="Max degree + 1")
     parser.add_argument("--minDegreeAtmost", type=int, help="At least one vertex in the intersection graph must have degree at most this")
     args = parser.parse_args()
-    b = EFL(args.n1, args.n2, staticInitialPartition=args.staticInitialPartition)
+    b = EFL(args.n1, args.n2, staticInitialPartition=args.static_partition)
     b.add_constraints_by_arguments(args)
     b.solveArgs(args)

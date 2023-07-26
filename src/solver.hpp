@@ -54,6 +54,9 @@ typedef struct
   vector<vector<lit_t>> staticPartition;          // variables indicating whether two vertices are in the same partition
   vector<vector<vector<lit_t>>> triangles;        // variables indicating whether triangle is present
 
+  int numberOfOverlayingGraphs; // generate multiple graphs at once (can also bee seen as edge coloring given by the different level)
+  vector<vector<vector<lit_t>>> edgesMultiple; // edge variables of several graphs
+
   int nextFreeVariable;
 
   FILE *symBreakClausesFile;
@@ -73,6 +76,9 @@ typedef struct
   vector<vector<vertex_t>> initialVertexOrderings;
 } configSolver;
 
+void make_edge_vars(configSolver &config);
+void make_multi_edge_vars(configSolver &config);
+
 typedef struct
 {
   clock_t start;
@@ -86,7 +92,7 @@ typedef struct
 class GraphSolver
 {
 public:
-  void solve(); // TODO suitable return value;
+  bool solve(); // TODO suitable return value;
   GraphSolver(configSolver config)
   {
     stats.start = clock();
@@ -98,7 +104,20 @@ public:
     // add dynamic symmetry breaking
     if (!config.turnoffSMS)
     {
-      if (config.combineStaticPlusDynamic)
+      if (config.numberOfOverlayingGraphs)
+      {
+        if (config.initialVertexOrderings.empty())
+        {
+          vertex_ordering_t basicVertexOrdering;
+          for (int i = 0; i < vertices; i++)
+            basicVertexOrdering.push_back(i);
+          config.initialVertexOrderings.push_back(basicVertexOrdering);
+        }
+        
+        auto checker = new MultipleMinimalityChecker(config.frequency, config.initialPartition, config.initialVertexOrderings, config.cutoff, config.symBreakClausesFile);
+        this->partiallyDefinedMultiGraphCheckers.push_back(checker);
+      }
+      else if (config.combineStaticPlusDynamic)
       {
         auto checker = new MinimalityCheckerWithStaticPartition(config.frequency, config.cutoff, config.edges, config.staticPartition);
         this->complexPartiallyDefinedGraphCheckers.push_back(checker);
@@ -113,7 +132,7 @@ public:
             basicVertexOrdering.push_back(i);
           config.initialVertexOrderings.push_back(basicVertexOrdering);
         }
-        auto checker = new MinimalityChecker(config.frequency, config.initialPartition, config.initialVertexOrderings, config.cutoff);
+        auto checker = new MinimalityChecker(config.frequency, config.initialPartition, config.initialVertexOrderings, config.cutoff, config.symBreakClausesFile);
         this->partiallyDefinedGraphCheckers.push_back(checker);
       }
     }
@@ -147,6 +166,11 @@ public:
     complexFullyDefinedGraphCheckers.push_back(checker);
   }
 
+  void addPartiallyDefinedMultiGraphChecker(PartiallyDefinedMultiGraphChecker *checker)
+  {
+    partiallyDefinedMultiGraphCheckers.push_back(checker);
+  }
+
   vector<vector<lit_t>> edges; // edges to variables
 
   vector<vector<lit_t>> edge_stats;
@@ -160,6 +184,7 @@ private:
   vector<ComplexPartiallyDefinedGraphChecker *> complexPartiallyDefinedGraphCheckers;
   vector<FullyDefinedGraphChecker *> fullyDefinedGraphCheckers;
   vector<ComplexFullyDefinedGraphChecker *> complexFullyDefinedGraphCheckers;
+  vector<PartiallyDefinedMultiGraphChecker *> partiallyDefinedMultiGraphCheckers;
 
 protected:
   configSolver config;
@@ -169,13 +194,19 @@ protected:
   const vector<int> *model = NULL; // model of the last canidate solution
 
   // functions which must be implemented for the concrete solver
-  virtual void solve(vector<int> assumptions) = 0;              // solve the formula under the assumption
+  virtual bool solve(vector<int> assumptions) = 0;              // solve the formula under the assumption
   virtual bool solve(vector<int> assumptions, int timeout) = 0; // solve with a given timeout; return false if timeout was reached
 
   virtual void addClause(const vector<lit_t> &clause, bool redundant) = 0;
   virtual adjacency_matrix_t getAdjacencyMatrix() = 0;
+  virtual vector<adjacency_matrix_t> getAdjacencyMatrixMultiple() = 0;
   virtual vector<truth_value_t> &getCurrentAssignemnt() = 0;
   virtual vector<vector<truth_value_t>> getStaticPartition() = 0;
+
+  void recordGraphStats(const adjacency_matrix_t &matrix);
+  void initEdgeMemory();
+  void initTriangleMemory();
+  void printEdgeStats();
 
   // functions which are the same for all solvers, which use the previous funcitons
 private:
@@ -183,11 +214,6 @@ private:
   bool checkPartiallyDefined(bool isFullyDefined);
   bool checkFullyDefinedGraph(const adjacency_matrix_t &matrix, const vector<int> &model); // check the property of the fully defined graph, given the model
   void printStatistics();
-
-  void recordGraphStats(const adjacency_matrix_t &matrix);
-  void initEdgeMemory();
-  void initTriangleMemory();
-  void printEdgeStats();
 
 public:
   bool propagate(); // Check state of partial assignment and add clauses if necessary; returns true if no clause was added otherwise false

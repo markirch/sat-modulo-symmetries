@@ -141,3 +141,31 @@ void ThicknessTwoChecker::checkProperty(const adjacency_matrix_t &m)
         throw forbiddenGraph;
     }
 }
+
+void ThicknessTwoCheckerMulti::checkProperty(const vector<adjacency_matrix_t> &matrices)
+{
+    auto m1 = matrices[1];
+
+    auto edges = testPlanarity(m1);
+    if (!edges.empty())
+    {
+        vector<forbidden_graph_t> forbiddenGraphs(3);
+        for (auto e : edges)
+        {
+            forbiddenGraphs[1].push_back(make_pair(truth_value_true, e));
+        }
+        throw forbiddenGraphs;
+    }
+
+    auto m2 = matrices[2];
+    edges = testPlanarity(m2);
+    if (!edges.empty())
+    {
+        vector<forbidden_graph_t> forbiddenGraphs(3);
+        for (auto e : edges)
+        {
+            forbiddenGraphs[2].push_back(make_pair(truth_value_true, make_pair(max(e.first, e.second), min(e.first, e.second))));  // from higher to lower vertex present
+        }
+        throw forbiddenGraphs;
+    }
+}

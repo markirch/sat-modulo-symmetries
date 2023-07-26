@@ -55,7 +55,7 @@ void isMinimal(vertex_ordering_t vertices, partition_t partition, int row, adjac
 // Adapt the partition according the selected vertex for the row
 void isMinimalVertex(vertex_ordering_t vertices, partition_t partition, int row, adjacency_matrix_t &adjacency_matrix, minimalit_check_config_t config, int &count)
 {
-   
+
     vertex_t n = adjacency_matrix.size();
     vertex_t vertex = vertices[row];
     vertex_t col = row + 1; // current column
@@ -312,7 +312,7 @@ int getElementFromArray(int *array, int n, int elem)
     return -1;
 }
 
-void createClause(vertex_ordering_t &vertices, adjacency_matrix_t &adjacency_matrix, minimalit_check_config_t )
+void createClause(vertex_ordering_t &vertices, adjacency_matrix_t &adjacency_matrix, minimalit_check_config_t)
 {
     // printf("create clause\n");
     // for (int i = 0; i < adjacency_matrix.size(); i++)
@@ -421,4 +421,9 @@ void checkIfPartition(std::vector<vertex_t> vertices)
     if (std::any_of(reached.begin(), reached.end(), [](auto x)
                     { return !x; })) // check if no doubles
         EXIT_UNWANTED_STATE
+}
+
+void checkMinimalityMultiple(vector<adjacency_matrix_t> &, vertex_ordering_t, minimalit_check_config_t)
+{
+    EXIT_UNWANTED_STATE // not implemented yet
 }

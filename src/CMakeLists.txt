@@ -25,15 +25,22 @@ if(Clingo_FOUND) # only build with clingo if the library is available
 	endif()
 endif()
 
+#set_property(GLOBAL PROPERTY RULE_LAUNCH_COMPILE "time")
+
+add_library(sms "minimalityCheck.cpp" ${sources})
+add_library(smsdir "minimalityCheck_dir.cpp" ${sources})
+
 # targets must be added *after* all calls to link_libraries()
-add_executable(smsg ${sources} "minimalityCheck.cpp" "main.cpp")
-add_executable(smsd ${sources} "minimalityCheck_dir.cpp" "main.cpp")
+add_executable(smsg "main.cpp")
+add_executable(smsd "main.cpp")
 
 target_compile_definitions(smsd PRIVATE DIRECTED)
+target_compile_definitions(smsdir PRIVATE DIRECTED)
 
-add_library(ipasir "minimalityCheck.cpp" ${sources})
+target_link_libraries(smsg PRIVATE sms)
+target_link_libraries(smsd PRIVATE smsdir)
 
-install(TARGETS smsg smsd ipasir)
+install(TARGETS smsg smsd sms smsdir)
 
 # commands for adding Z3
 # target_include_directories(graphgen PRIVATE ${Z3_CXX_INCLUDE_DIRS})

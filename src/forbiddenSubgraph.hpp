@@ -5,15 +5,19 @@
 
 #ifdef GLASGOW
 
-#include "homomorphism.hh"
+#include "gss/homomorphism.hh"
+#include <chrono>
+using namespace std::chrono;
+using namespace gss;
+using std::pair;
 
 class ForbiddenSubgraphCheckerGlasgow : public PartiallyDefinedGraphChecker
 {
     vector<InputGraph> forbiddenSubgraphsGlasgow;
 
     HomomorphismParams defaultHomParams = {
-        .timeout = make_shared<Timeout>(0s),
-        .restarts_schedule = make_unique<LubyRestartsSchedule>(LubyRestartsSchedule::default_multiplier),
+        .timeout = std::make_shared<Timeout>(0s),
+        .restarts_schedule = std::make_unique<LubyRestartsSchedule>(LubyRestartsSchedule::default_multiplier),
         .no_supplementals = true};
 
     InputGraph toGlasgowGraph(const adjacency_matrix_t &adjacencyMatrix, int nVertices)
@@ -48,7 +52,7 @@ public:
             vector<pair<int, int>> edges;
             int max_vertex = 0;
 
-            istringstream iss(line);
+            std::istringstream iss(line);
             clause_t clause;
             string space_delimiter = " ";
 
@@ -58,7 +62,7 @@ public:
                 int v1 = stoi(lit);
                 std::getline(iss, lit, ' ');
                 int v2 = stoi(lit);
-                edges.push_back(make_pair(v1, v2));
+                edges.push_back(std::make_pair(v1, v2));
                 if (v1 > max_vertex)
                 {
                     max_vertex = v1;

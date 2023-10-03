@@ -60,7 +60,7 @@ void ForbiddenSubgraphCheckerGlasgow::checkProperty(const adjacency_matrix_t &ma
     // if (G2.size() < 10)
     //     return;
 
-    InputGraph G = toGlasgowGraph(matrix, (int) matrix.size());
+    InputGraph G = toGlasgowGraph(matrix, (int)matrix.size());
     for (const InputGraph &H : forbiddenSubgraphsGlasgow)
     {
         int Gm = G.number_of_directed_edges();
@@ -77,7 +77,7 @@ void ForbiddenSubgraphCheckerGlasgow::checkProperty(const adjacency_matrix_t &ma
             {
                 if (u < v) // TODO directed version
                 {
-                    forbidden_graph.push_back(make_pair(truth_value_true, make_pair(res.mapping[u], res.mapping[v])));
+                    forbidden_graph.push_back(std::make_pair(truth_value_true, std::make_pair(res.mapping[u], res.mapping[v])));
                 }
             };
             H.for_each_edge(map_and_forbid_edge);

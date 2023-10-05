@@ -67,6 +67,7 @@ int main(int argc, char const **argv)
     std::ifstream dimacsFile;
     std::ifstream forAllFile;
     std::ifstream forbiddenSubgraphFile;
+    std::ifstream forbiddenInducedSubgraphFile;
 
     pair<int, int> minChomaticNumberSubgraph; // first give minimum chromatic number, second the size
     int minChromaticIndexHypergraph = 0;      // Minimum edge chromatic number of the hypergraph
@@ -128,7 +129,7 @@ int main(int argc, char const **argv)
                                                            {
       forAllFile.open(value);
       if (forAllFile.fail()) {
-          std::cerr << "Failed to open forall file." << std::endl;
+          std::cerr << "Failed to open forall file." << value << std::endl;
           std::exit(EXIT_FAILURE);
       } }),
               "File containing an universal property which should be ensured, i.e., the graphs are not allowed to satisfy the existential encoding given by the file.")
@@ -136,12 +137,20 @@ int main(int argc, char const **argv)
 #ifdef GLASGOW
       ("forbidden-subgraphs", po::value<std::string>()->notifier([&forbiddenSubgraphFile](const std::string &value)
                                                                        {
-          forbiddenSubgraphFile = ifstream(value);
+          forbiddenSubgraphFile = std::ifstream(value);
           if (forbiddenSubgraphFile.fail()) {
               std::cerr << "Failed to open forbidden subgraphs file." << std::endl;
               std::exit(EXIT_FAILURE);
           } }),
               "File with a list of the forbidden subgraphs which will be excluded during search with the Glasgow subgraph isomorphism solver")
+      ("forbidden-induced-subgraphs", po::value<std::string>()->notifier([&forbiddenInducedSubgraphFile](const std::string &value)
+                                                                       {
+          forbiddenInducedSubgraphFile = std::ifstream(value);
+          if (forbiddenInducedSubgraphFile.fail()) {
+              std::cerr << "Failed to open forbidden induced subgraphs file." << std::endl;
+              std::exit(EXIT_FAILURE);
+          } }),
+              "same as above, only induced")
 #endif
       ("no-SMS", po::bool_switch(&config.turnoffSMS), "Turn off SMS, i.e., no minimality check")
       ("initial-partition", po::value<std::vector<int>>(&initialPartitionArguments)->multitoken(),
@@ -226,14 +235,14 @@ int main(int argc, char const **argv)
     }
     catch (const po::unknown_option &e)
     {
-        cout << "Error: Unknown option '" << e.get_option_name() << "'" << std::endl;
-        cout << all_opts << std::endl;
+        std::cout << "Error: Unknown option '" << e.get_option_name() << "'" << std::endl;
+        std::cout << all_opts << std::endl;
         return EXIT_FAILURE;
     }
 
     if (vm.count("help"))
     {
-        cout << all_opts << "\n";
+        std::cout << all_opts << std::endl;
         return 0;
     }
 
@@ -399,7 +408,7 @@ int main(int argc, char const **argv)
         }
 
         if (triangleVersion)
-            EXIT_UNWANTED_STATE; // not compatable with trianble version
+            EXIT_UNWANTED_STATE; // not compatable with triangle version
 
         if (config.b_vertices[0] != 0 || config.b_vertices[1] != 0)
             EXIT_UNWANTED_STATE // not compatable with intersection graph
@@ -435,7 +444,7 @@ int main(int argc, char const **argv)
         {
             if (strncmp(line.c_str(), "c\t", 2) == 0)
                 continue;
-            istringstream iss(line);
+            std::istringstream iss(line);
             clause_t clause;
             string space_delimiter = " ";
 
@@ -443,7 +452,7 @@ int main(int argc, char const **argv)
             while (std::getline(iss, lit, ' '))
             {
                 int l = stoi(lit);
-                config.nextFreeVariable = max(config.nextFreeVariable, abs(l) + 1);
+                config.nextFreeVariable = std::max(config.nextFreeVariable, abs(l) + 1);
                 clause.push_back(l);
             }
             cnf.push_back(clause);
@@ -454,7 +463,7 @@ int main(int argc, char const **argv)
     {
         int maxVar;
         file2cnf(dimacsFile, cnf, maxVar);
-        config.nextFreeVariable = max(config.nextFreeVariable, maxVar + 1);
+        config.nextFreeVariable = std::max(config.nextFreeVariable, maxVar + 1);
     }
 
     // check if zero literal
@@ -546,10 +555,10 @@ int main(int argc, char const **argv)
     }
 
 #ifdef GLASGOW
-    if (forbiddenSubgraphFile.is_open())
+    if (forbiddenSubgraphFile.is_open() || forbiddenInducedSubgraphFile.is_open())
     {
-        int frequencyForbiddenSubgraphs = 100;
-        solver->addPartiallyDefinedGraphChecker(new ForbiddenSubgraphCheckerGlasgow(frequencyForbiddenSubgraphs, forbiddenSubgraphFile));
+        int frequencyForbiddenSubgraphs = vertices > 2 ? vertices : 3;
+        solver->addPartiallyDefinedGraphChecker(new ForbiddenSubgraphCheckerGlasgow(frequencyForbiddenSubgraphs, forbiddenSubgraphFile, forbiddenInducedSubgraphFile));
     }
 #endif
 

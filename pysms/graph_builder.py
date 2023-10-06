@@ -8,6 +8,7 @@ from pysms.counters import *
 import argparse
 import os
 from sys import *
+from ast import literal_eval
 
 
 def getDefaultParser():
@@ -30,6 +31,7 @@ def getDefaultParser():
     solve_args.add_argument("--all-graphs", "-a", action="store_true", help="generate all graphs (without this, the solver will exit after the first solution)")
     solve_args.add_argument("--hide-graphs", "-hg", action="store_true", help="do not display graphs (meant as a counting functionality, though the graphs still need to be enumerated)")
     solve_args.add_argument("--args-SMS", type=str, default="", help="command line to be appended to the call to smsg/smsd (see src/main.cpp or README.md)")
+    solve_args.add_argument("--graph-format", choices=['edge-list','graph6'], default=None, help="output format of graphs")
 
     # number of edges
     constraint_args.add_argument("--num-edges-upp", type=int, help="upper bound on the maximum number of edges")
@@ -95,12 +97,12 @@ class GraphEncodingBuilder(IDPool, list):
     """A class for building an encoding in the context of SMS.
     The IDPool gives the next free variable whilst the list contains the clauses"""
 
-    def __init__(self, n, directed=False, multiGraph=None, staticInitialPartition=False, underlyingGraph=False):
+    def __init__(self, n, directed=False, multiGraph=None, staticInitialPartition=False, underlyingGraph=False, DEBUG=1):
         super().__init__()
         self.directed = directed
         self.V = list(range(n))
         self.n = n
-        self.DEBUG = 1
+        self.DEBUG = DEBUG
         self.varStaticInitialPartition = None
 
         self.paramsSMS = {"vertices": self.n, "print-stats": True, "frequency": 30}  # default params
@@ -158,7 +160,7 @@ class GraphEncodingBuilder(IDPool, list):
         """Get the propositional variable which holds whether u and v are in the same partition"""
         return self.varStaticInitialPartition[u][v]
 
-    def solve(self, allGraphs=False, hideGraphs=False, cnfFile=None, args_SMS=""):
+    def solve(self, allGraphs=False, hideGraphs=False, cnfFile=None, args_SMS="",graph_format=None):
         """Solve the formula, given the encoding, using SMS."""
         if cnfFile == None:
             cnfFile = f"./temp{os.getpid()}.enc"  # TODO use tempfile module
@@ -181,13 +183,28 @@ class GraphEncodingBuilder(IDPool, list):
 
         if self.DEBUG:
             print("running the command: ", sms_command)
-        stdout.flush()
-        os.system(sms_command)
-        os.system(f"rm {cnfFile}")
+
+        if graph_format:
+            assert(graph_format in ['edge-list','graph6'])
+            for line in os.popen(sms_command).read().split("\n"):
+                if line and line[0] == '[':
+                    edges = literal_eval(line)
+                    if graph_format == 'graph6':
+                        import networkx as nx
+                        print("graph6 string:",nx.to_graph6_bytes(nx.Graph(edges),header=False).decode(),end="")
+                    if graph_format == 'edge-list':
+                        print("edges:",edges)
+                elif self.DEBUG:
+                    print(line,end="\n")
+        else:
+            os.system(sms_command)
+
+        os.system(f"rm {cnfFile}") # cleanup
+
 
     def solveArgs(self, args):
         """Wrapper for solving using arguments provided by argsParser"""
-        self.solve(allGraphs=args.all_graphs, hideGraphs=args.hide_graphs, cnfFile=args.cnf_file, args_SMS=args.args_SMS)
+        self.solve(allGraphs=args.all_graphs, hideGraphs=args.hide_graphs, cnfFile=args.cnf_file, args_SMS=args.args_SMS, graph_format=args.graph_format)
 
     # ------------------some utilies--------------------------
 
@@ -507,6 +524,6 @@ class GraphEncodingBuilder(IDPool, list):
 
 if __name__ == "__main__":
     args = getDefaultParser().parse_args()
-    b = GraphEncodingBuilder(args.vertices, directed=args.directed, multiGraph=args.multigraph, staticInitialPartition=args.static_partition, underlyingGraph=args.underlying_graph)
+    b = GraphEncodingBuilder(args.vertices, directed=args.directed, multiGraph=args.multigraph, staticInitialPartition=args.static_partition, underlyingGraph=args.underlying_graph, DEBUG=args.DEBUG)
     b.add_constraints_by_arguments(args)
     b.solveArgs(args)

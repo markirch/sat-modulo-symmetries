@@ -5,16 +5,29 @@
 
 #ifdef GLASGOW
 
-#include "homomorphism.hh"
+#include "gss/homomorphism.hh"
+#include <chrono>
+using namespace std::chrono;
+using namespace gss;
+using std::pair;
 
 class ForbiddenSubgraphCheckerGlasgow : public PartiallyDefinedGraphChecker
 {
     vector<InputGraph> forbiddenSubgraphsGlasgow;
+    vector<InputGraph> forbiddenInducedSubgraphsGlasgow;
 
     HomomorphismParams defaultHomParams = {
-        .timeout = make_shared<Timeout>(0s),
-        .restarts_schedule = make_unique<LubyRestartsSchedule>(LubyRestartsSchedule::default_multiplier),
-        .no_supplementals = true};
+        .timeout = std::make_shared<Timeout>(0s),
+        .restarts_schedule = std::make_unique<LubyRestartsSchedule>(LubyRestartsSchedule::default_multiplier),
+        .no_supplementals = true
+    };
+
+    HomomorphismParams inducedHomParams = {
+        .timeout = std::make_shared<Timeout>(0s),
+        .induced = true,
+        .restarts_schedule = std::make_unique<LubyRestartsSchedule>(LubyRestartsSchedule::default_multiplier),
+        .no_supplementals = true
+    };
 
     InputGraph toGlasgowGraph(const adjacency_matrix_t &adjacencyMatrix, int nVertices)
     {
@@ -33,14 +46,23 @@ class ForbiddenSubgraphCheckerGlasgow : public PartiallyDefinedGraphChecker
     }
 
 public:
-    ForbiddenSubgraphCheckerGlasgow(int frequency, std::ifstream &forbiddenSubgraphFile)
+    ForbiddenSubgraphCheckerGlasgow(int frequency, std::ifstream &forbiddenSubgraphFile, std::ifstream &forbiddenInducedSubgraphFile)
     {
-        checkFinal = false;
+        //checkFinal = false;
         name = "ForbiddenSubgraphCheckerGlasgow";
         this->frequency = frequency;
         // parse file for forbidden subgraphs
+        if (forbiddenSubgraphFile.is_open()) {
+          load_graphs(forbiddenSubgraphsGlasgow, forbiddenSubgraphFile);
+        }
+        if (forbiddenInducedSubgraphFile.is_open()) {
+          load_graphs(forbiddenInducedSubgraphsGlasgow, forbiddenInducedSubgraphFile);
+        }
+    }
+
+    void load_graphs(std::vector<InputGraph> &storage, std::ifstream &graphs) {
         string line;
-        while (getline(forbiddenSubgraphFile, line))
+        while (getline(graphs, line))
         {
             if (strncmp(line.c_str(), "c\t", 2) == 0)
                 continue;
@@ -48,7 +70,7 @@ public:
             vector<pair<int, int>> edges;
             int max_vertex = 0;
 
-            istringstream iss(line);
+            std::istringstream iss(line);
             clause_t clause;
             string space_delimiter = " ";
 
@@ -58,7 +80,7 @@ public:
                 int v1 = stoi(lit);
                 std::getline(iss, lit, ' ');
                 int v2 = stoi(lit);
-                edges.push_back(make_pair(v1, v2));
+                edges.push_back(std::make_pair(v1, v2));
                 if (v1 > max_vertex)
                 {
                     max_vertex = v1;
@@ -69,10 +91,10 @@ public:
                 }
             }
 
-            forbiddenSubgraphsGlasgow.push_back(InputGraph(max_vertex + 1, false, false));
+            storage.push_back(InputGraph(max_vertex + 1, false, false));
             for (pair e : edges)
             {
-                forbiddenSubgraphsGlasgow.back().add_edge(e.first, e.second);
+                storage.back().add_edge(e.first, e.second);
             }
         }
     }

@@ -60,13 +60,12 @@ void ForbiddenSubgraphCheckerGlasgow::checkProperty(const adjacency_matrix_t &ma
     // if (G2.size() < 10)
     //     return;
 
-    InputGraph G = toGlasgowGraph(matrix, (int) matrix.size());
+    InputGraph G = toGlasgowGraph(matrix, (int)matrix.size());
     for (const InputGraph &H : forbiddenSubgraphsGlasgow)
     {
         int Gm = G.number_of_directed_edges();
         int Hm = H.number_of_directed_edges();
-        if (Gm < Hm)
-        {
+        if (Gm < Hm) { 
             continue;
         }
         HomomorphismResult res = solve_homomorphism_problem(H, G, defaultHomParams);
@@ -77,10 +76,42 @@ void ForbiddenSubgraphCheckerGlasgow::checkProperty(const adjacency_matrix_t &ma
             {
                 if (u < v) // TODO directed version
                 {
-                    forbidden_graph.push_back(make_pair(truth_value_true, make_pair(res.mapping[u], res.mapping[v])));
+                    forbidden_graph.push_back(std::make_pair(truth_value_true, std::make_pair(res.mapping[u], res.mapping[v])));
                 }
             };
             H.for_each_edge(map_and_forbid_edge);
+            throw forbidden_graph;
+        }
+    }
+    for (const InputGraph &H : forbiddenInducedSubgraphsGlasgow)
+    {
+        int Gm = G.number_of_directed_edges();
+        int Hm = H.number_of_directed_edges();
+        if (Gm < Hm) { 
+            continue;
+        }
+        HomomorphismResult res = solve_homomorphism_problem(H, G, inducedHomParams);
+        if (!res.mapping.empty())
+        {
+            forbidden_graph_t forbidden_graph;
+
+            vector<int> image;
+            for (pair<int, int> corresponding_vertices : res.mapping) {
+              image.push_back(corresponding_vertices.second);
+            }
+
+            for (size_t i = 0; i < image.size(); i++) {
+                for (size_t j = i+1; j < image.size(); j++) {
+                    if (G.adjacent(image[i], image[j])) {
+                        // to block an induced subgraph, we can either remove an edge (this branch) or ...
+                        forbidden_graph.push_back(std::make_pair(truth_value_true, std::make_pair(image[i], image[j])));
+                    } else {
+                        // ... add a missing edge to render the subgraph non-induced
+                        forbidden_graph.push_back(std::make_pair(truth_value_false, std::make_pair(image[i], image[j])));
+                    }
+                }
+            }
+
             throw forbidden_graph;
         }
     }

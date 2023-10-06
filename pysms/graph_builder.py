@@ -187,11 +187,12 @@ class GraphEncodingBuilder(IDPool, list):
 
         if graph_format:
             assert(graph_format in ['edge-list','graph6'])
+            if graph_format == 'graph6':
+                import networkx as nx
             for line in os.popen(sms_command).read().split("\n"):
                 if line and line[0] == '[':
                     edges = literal_eval(line)
                     if graph_format == 'graph6':
-                        import networkx as nx
                         print(nx.to_graph6_bytes(nx.Graph(edges),header=False).decode(),end="")
                     if graph_format == 'edge-list':
                         print(edges)

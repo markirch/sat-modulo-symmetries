@@ -179,7 +179,8 @@ class GraphEncodingBuilder(IDPool, list):
 
         python_args_SMS = " ".join(f"--{param} {value}" for param, value in self.paramsSMS.items())
 
-        sms_command = f"time {program} {python_args_SMS} {args_SMS} --dimacs {cnfFile}"  # TODO eventually parse args_SMS to allow to override
+        sms_command = "time " if self.DEBUG else ""
+        sms_command += f"{program} {python_args_SMS} {args_SMS} --dimacs {cnfFile}"  # TODO eventually parse args_SMS to allow to override
 
         if self.DEBUG:
             print("running the command: ", sms_command)

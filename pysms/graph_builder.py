@@ -191,9 +191,9 @@ class GraphEncodingBuilder(IDPool, list):
                     edges = literal_eval(line)
                     if graph_format == 'graph6':
                         import networkx as nx
-                        print("graph6 string:",nx.to_graph6_bytes(nx.Graph(edges),header=False).decode(),end="")
+                        print(nx.to_graph6_bytes(nx.Graph(edges),header=False).decode(),end="")
                     if graph_format == 'edge-list':
-                        print("edges:",edges)
+                        print(edges)
                 elif self.DEBUG:
                     print(line,end="\n")
         else:

@@ -25,9 +25,10 @@ def getDefaultParser():
     main_args.add_argument("--underlying-graph", action="store_true", help="consider the underlying undirected graph for directed graphs")
     main_args.add_argument("--static-partition", action="store_true", help="specify a statically enforced partial vertex ordering (respected by SMS)")
     main_args.add_argument("--counter", choices=["sequential", "totalizer"], default="sequential", help="the CNF encoding for cardinality constraints")
-    main_args.add_argument("--DEBUG", "-D", type=int, default=1, help="debug level")
+    main_args.add_argument("--DEBUG", "-D", type=int, default=0, help="debug level")
 
     # solve options
+    solve_args.add_argument("--no-solve", action="store_true", help="don't run SMS, only generate the constraints and output either to stdout, or to a file specified by --cnf-file")
     solve_args.add_argument("--all-graphs", "-a", action="store_true", help="generate all graphs (without this, the solver will exit after the first solution)")
     solve_args.add_argument("--hide-graphs", "-hg", action="store_true", help="do not display graphs (meant as a counting functionality, though the graphs still need to be enumerated)")
     solve_args.add_argument("--args-SMS", type=str, default="", help="command line to be appended to the call to smsg/smsd (see src/main.cpp or README.md)")
@@ -97,7 +98,7 @@ class GraphEncodingBuilder(IDPool, list):
     """A class for building an encoding in the context of SMS.
     The IDPool gives the next free variable whilst the list contains the clauses"""
 
-    def __init__(self, n, directed=False, multiGraph=None, staticInitialPartition=False, underlyingGraph=False, DEBUG=1):
+    def __init__(self, n, directed=False, multiGraph=None, staticInitialPartition=False, underlyingGraph=False, DEBUG=0):
         super().__init__()
         self.directed = directed
         self.V = list(range(n))
@@ -160,11 +161,12 @@ class GraphEncodingBuilder(IDPool, list):
         """Get the propositional variable which holds whether u and v are in the same partition"""
         return self.varStaticInitialPartition[u][v]
 
-    def solve(self, allGraphs=False, hideGraphs=False, cnfFile=None, args_SMS="",graph_format=None):
+    def solve(self, allGraphs=False, hideGraphs=False, cnfFile=None, args_SMS="", forwarding_args=[], graph_format=None):
         """Solve the formula, given the encoding, using SMS."""
         if cnfFile == None:
             cnfFile = f"./temp{os.getpid()}.enc"  # TODO use tempfile module
-        self.print_dimacs(cnfFile)  # write script to temporary file
+        with open(cnfFile, "w") as cnf_fh:
+            self.print_dimacs(cnf_fh)  # write script to temporary file
 
         program = "smsd" if self.directed else "smsg"  # we expect these binaries to be on PATH
 
@@ -181,6 +183,8 @@ class GraphEncodingBuilder(IDPool, list):
 
         sms_command = "time " if self.DEBUG else ""
         sms_command += f"{program} {python_args_SMS} {args_SMS} --dimacs {cnfFile}"  # TODO eventually parse args_SMS to allow to override
+        for arg in forwarding_args:
+            sms_command += f" '{arg}'"
 
         if self.DEBUG:
             print("running the command: ", sms_command)
@@ -204,9 +208,9 @@ class GraphEncodingBuilder(IDPool, list):
         os.system(f"rm {cnfFile}") # cleanup
 
 
-    def solveArgs(self, args):
+    def solveArgs(self, args, forwarding_args):
         """Wrapper for solving using arguments provided by argsParser"""
-        self.solve(allGraphs=args.all_graphs, hideGraphs=args.hide_graphs, cnfFile=args.cnf_file, args_SMS=args.args_SMS, graph_format=args.graph_format)
+        self.solve(allGraphs=args.all_graphs, hideGraphs=args.hide_graphs, cnfFile=args.cnf_file, args_SMS=args.args_SMS, forwarding_args=forwarding_args, graph_format=args.graph_format)
 
     # ------------------some utilies--------------------------
 
@@ -228,12 +232,11 @@ class GraphEncodingBuilder(IDPool, list):
         self.extend(CNF_AND(ins, out))
         return out
 
-    def print_dimacs(self, filename=None):
-        """Print the current encoding to the given file"""
-        with open(filename, "w") as file:
-            print(f"p cnf {len(self)} {self.nextId}", file=file)
-            for c in self:
-                print(" ".join(str(x) for x in c), 0, file=file)
+    def print_dimacs(self, outstream):
+        """Print the current encoding to the given output stream"""
+        print(f"p cnf {len(self)} {self.nextId-1}", file=outstream)
+        for c in self:
+            print(" ".join(str(x) for x in c), 0, file=outstream)
 
     def counterFunction(self, variables, countUpto, atMost=None, atLeast=None, counterType="sequential"):
         """Wrapper for the counterFunction: constraints are added to the object itself and also the ids are given by the object."""
@@ -245,8 +248,8 @@ class GraphEncodingBuilder(IDPool, list):
         """Add constraints based on args given by default parser"""
         g = self
         if g.DEBUG:
-            print("Arguments:", args)
-            stdout.flush()
+            print("Arguments:", args, file=stderr)
+            stderr.flush()
         if args.Delta_upp:
             self.maxDegree(args.Delta_upp, args.counter)
         if args.delta_low:
@@ -525,7 +528,14 @@ class GraphEncodingBuilder(IDPool, list):
 # ---------------------Main function------------------------------------------
 
 if __name__ == "__main__":
-    args = getDefaultParser().parse_args()
+    args, forwarding_args = getDefaultParser().parse_known_args()
     b = GraphEncodingBuilder(args.vertices, directed=args.directed, multiGraph=args.multigraph, staticInitialPartition=args.static_partition, underlyingGraph=args.underlying_graph, DEBUG=args.DEBUG)
     b.add_constraints_by_arguments(args)
-    b.solveArgs(args)
+    if args.no_solve:
+        if args.cnf_file:
+            with open(args.cnf_file, "w") as cnf_fh:
+                b.print_dimacs(cnf_fh)
+        else:
+            b.print_dimacs(stdout)
+    else:
+        b.solveArgs(args, forwarding_args)

@@ -2,7 +2,7 @@
 
 SAT Modulo Symmetries (SMS) is a framework that enhances SAT solvers with dynamic symmetry breaking. SMS is useful for isomorph-free generation and enumeration of graphs under constraints.
 
-This SMS package contains the enhanced SAT solvers `smsg` and `smsd` written in C++ which generate undirected and directed graphs modulo isomorphisms respectively, as well as a Python sub-module for easier creation of graph encodings with many predefined encodings to use.
+This SMS package contains the enhanced SAT solvers `smsg` and `smsd`, written in C++, which generate undirected and directed graphs modulo isomorphisms respectively, as well as a Python sub-module for easier creation of graph encodings with many predefined encodings to use.
 
 
 ## Requirements
@@ -12,10 +12,20 @@ This SMS package contains the enhanced SAT solvers `smsg` and `smsd` written in 
 - To install the Python wrapper and encodings, [pip](https://pypi.org/project/pip).
 - [CMake](https://cmake.org)
 
-## Install (with root privileges)
+## Install
 
 Currently, only installation on Linux is supported.
-With [CaDiCaL](https://github.com/arminbiere/cadical) and [Boost](https://www.boost.org/) installed, SMS can be built and installed as follows: <!---CMake in the usual way, by executing the following commands: -->
+
+A copy of [CaDiCaL](https://github.com/arminbiere/cadical) is supplied (and expected) in the subdirectory `cadical`.
+Build CaDiCaL with
+```
+cd cadical
+./configure && make
+```
+as per its build instructions.
+
+Next, install [Boost](https://www.boost.org/).
+Then, SMS can be built and installed as follows: <!---CMake in the usual way, by executing the following commands: -->
 
 ```bash
 git clone https://github.com/markirch/sat-modulo-symmetries
@@ -26,22 +36,28 @@ chmod +x build-and-install.sh
 
 `build-and-install.sh` uses CMake, the built binaries are found in `build/src/`.
 They are automatically installed to the default location (which probably requires root privileges, the script will ask).
-Use `build-and-install-local.sh` instead if you need to install locally.
+Use `build-and-install.sh -l` instead if you don't have administrative priveleges and need to install locally (see `-h` for more options).
 
 `smsg` generates undirected graphs, `smsd` is for directed graphs.
 
-
 ## Usage
 
-There are two main options to use the programs:
+SMS is a system that generates graphs modulo isomorphisms *under constraints*.
+An example of such a task is to generate graphs with a certain maximum degree or number of edges, although such simple constraints barely scratch the surface of what SMS can do.
 
-- using a Python wrapper, packed with many predefined encodings of graph properties;
-- using the programs `smsg` and `smsd` directly.
+SMS consists of two main parts:
 
-For a quick start, we recommend using the Python wrapper.
+- the generation engine `smsg` (a compiled C++ binary) and its counterpart for directed graphs `smsd`; and
+- a Python module, `pysms`, which comes with a library of pre-defined constraints, and an interface to implement custom new ones.
 
+The typical workflow with SMS likewise has two steps.
+The first is to generate the desired constraints and encode them in the DIMACS format.
+This can be achieved using the module `pysms.graph_builder`, either selecting from the predefined constraints, or implementing a Python script to produce new ones.
+The second is to 'solve' the constraints using `smsg` or `smsd`.
+For convenience, the Python module has the capacity (turned on by default) to directly call `smsg` and solve the constraints it produces.
+Therefore, for a quick start, we recommend using the Python wrapper.
 
-### Python Wrapper
+### Python Module/Wrapper
 
 The wrapper can be used as a library to build custom encodings or directly for enumerating graphs.
 The wrapper is implemented in the file `pysms/graph_builder.py`, if you followed the installation process, the package `pysms` is installed and available for import. 
@@ -51,7 +67,11 @@ For example, the following command produces all graphs with 6 vertices up to iso
 python -m pysms.graph_builder --vertices 6 --delta-low 3 --all-graphs
 ``` 
 
-The found graphs are printed to standard output as Python lists of edges. The most important options are the following:
+The found graphs are printed to standard output as Python lists of edges.
+
+In order to only print the constraints (as a CNF formula in DIMACS) without solving, additionally pass `--no-solve`.
+
+The most important options to `pysms.graph_builder` are as follows:
 
 - `--vertices n` : search for graph with `n` vertices;
 - `--all-graphs` : enumerate all graphs up to isomorphism satisfying the given properties (without this, the program terminates after finding the first graph);
@@ -72,14 +92,17 @@ For all options available for `smsg` or `smsd`, run
 smsg --help
 ```
 
+The wrapper `pysms.graph_builder` will accept and forward any additional arguments to `smsg`.
+There is the legacy option to pass arguments to `smsg` through `pysms.graph_builder --args-SMS="..."`, which is now deprecated.
+
 SMS relies on a procedure called the _minimality check_ to filter out non-canonical isomorphic copies of graphs.
 This procedure is often fast, but has worst-case exponential running time.
-To avoid getting stuck in hard corner cases, we strongly recommend to use a time limit (cutoff) for the minimality check, by adding `--args-SMS "--cutoff 20000"`.
+To avoid getting stuck in hard corner cases, we strongly recommend to use a time limit (cutoff) for the minimality check, by adding `--cutoff 20000`.
 This limits the number of recursive calls in the minimality check, but potentially results in incomplete symmetry breaking.
 The graphs can be filtered afterwards with tools like [Nauty](https://pallini.di.uniroma1.it/) using the `shortg` command.
 
 
-#### Installing the Encoding Builder
+#### Using the Encoding Builder in Python
 
 The encoding builder is installed alongside `smsg` and `smsd` by `build-and-install.sh`, using `pip` as follows: 
 ```bash
@@ -111,12 +134,13 @@ for i,j,k in combinations(builder.V, 3):
 builder.solve(allGraphs=True)
 ```
 
-The `builder` object contains the encoding and all information like number of vertices and how to map edges to literals. 
+The `builder` object contains the encoding and all necessary metadata such as the number of vertices and how to map edges to literals. 
+The vertices are represented by the integers `0..n-1`.
 A clause can be added using `builder.append(clause)`.  
 The function `builder.var_edge(i,j)` returns the corresponding literal associated with the edge {i,j}.
-So, `[-builder.var_edge(i,j), -builder.var_edge(i,k), -builder.var_edge(j,k)]` represents a clause that ensures that `i,j,k` doesn't form a triangle.
+So, `[-builder.var_edge(i,j), -builder.var_edge(i,k), -builder.var_edge(j,k)]` represents a clause that ensures that the vertex triple `i,j,k` doesn't form a triangle.
 
-### Direct usage
+### Direct Usage
 
 The most important arguments of `smsg` and `smsd` are as follows:
 

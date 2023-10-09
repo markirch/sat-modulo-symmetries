@@ -7,14 +7,14 @@ We distinguish between propagators only on fully defined graphs and propagators 
 
 ### Partially defined graphs
 
-For writting a propagator, one can use the class `PartiallyDefinedGraphChecker` and implement the virtual function `virtual void checkProperty(const adjacency_matrix_t &matrix)`.
+For writing a propagator, one can use the class `PartiallyDefinedGraphChecker` and implement the virtual function `virtual void checkProperty(const adjacency_matrix_t &matrix)`.
 If the function throws an object of `forbidden_graph_t` given as a list of signed edges, then a clause is automatically added excluding this partially defined graph from the search space.
 
-At the end the an `PartiallyDefinedGraphChecker` object must be added to the solver, i.e., to a  `GraphSolver` object. `GraphSolver` contains a list of `PartiallyDefinedGraphChecker` called `partiallyDefinedGraphCheckers`, where it can simply be added.
+At the end, a `PartiallyDefinedGraphChecker` object must be added to the solver, i.e., to a  `GraphSolver` object. `GraphSolver` contains a list of `PartiallyDefinedGraphChecker` called `partiallyDefinedGraphCheckers`, where it can simply be added.
 
 #### Example
 
-We give a very simple example, for providing a propagator only keeping triangular free graphs:
+We give a very simple example, of a propagator that only keeps triangle-free graphs:
 
 ```python
 class TriangleFreeChecker : public PartiallyDefinedGraphChecker
@@ -49,17 +49,11 @@ Similar, for fully defined graphs, we have the class `FullyDefinedGraphChecker`.
 
 ## Forbidden Subgraphs
 
-SMS has the optional feature to generate graphs that do not contain any of a set of input forbidden subgraphs.
-To enable it, you need to install and build the [Glasgow Subgraph Solver](https://github.com/ciaranm/glasgow-subgraph-solver).
-Run the script `pull-and-make-glasgow-solver.sh` to obtain and build the Glasgow Subgraph Solver, then configure with the flag `-DGLASGOW`.
+SMS has the optional feature to generate graphs that do not contain any of a set of input forbidden graphs, either as ordinary or induced subgraphs.
+To enable the feature, install and build with the [Glasgow Subgraph Solver](https://github.com/ciaranm/glasgow-subgraph-solver), by running `./build-and-install.sh -s`.
 
-To build with the Glasgow Subgraph Solver, configure with 
-```bash
-cmake -Bbuild -H. -DGLASGOW=1
-``` 
-instead (any value for the GLASGOW variable will work).
-
-The forbidden subgraphs are provided to `smsg` by a file. The file is given to the program by the argument `--forbiddenSubgraphs FILE`, where the file contains a forbidden graph in each line. The graphs must be given in an easy to parse format easiest explained on an example
+The forbidden subgraphs are provided to `smsg` by a file. The file is given to the program by the argument `--forbidden-subgraphs FILE` (or `--forbidden-induced-subgraphs FILE`, the two can be used together), where the file contains a forbidden graph in each line.
+Each line describes a graph as follows: the line must contain an even number of space-separated positive integers, each consecutive pair describing one edge.
 
 ### Example for forbidden subgraphs
 
@@ -68,5 +62,5 @@ The forbidden subgraphs are provided to `smsg` by a file. The file is given to t
 0 1 1 2 2 3 0 3
 ```
 
-Two vertices form an edge, i.e., the first line represents the edges {0,1}, {1,2}, {0,2}. So, if we provide this file to the solver, only graphs without a triangle and a four-cycle are generated. Note that the graphs are not checked whether the are induced.
+Each consecutive pair of vertices form an edge, i.e., the first line represents the edges {0,1}, {1,2}, {0,2}. So, if we provide this file to the solver with `--forbidden-subgraphs`, only graphs without triangles and four-cycles will be generated.
 

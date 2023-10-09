@@ -1,8 +1,5 @@
-#include "coloring.h"
-#include <time.h>
-#include <stdio.h>
 #include <assert.h>
-#include <stdlib.h>
+#include "coloring.h"
 
 typedef int color;
 typedef int vertex;

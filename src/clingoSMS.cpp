@@ -1,5 +1,5 @@
 #include "useful.h"
-#include "solveClingoClass.hpp"
+#include "clingoSMS.hpp"
 
 // --------------------------------pure clingo part------------------------------------------
 

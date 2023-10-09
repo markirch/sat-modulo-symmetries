@@ -6,6 +6,8 @@
 #include <iostream>
 #include <iomanip>
 
+using std::string;
+
 typedef vector<signed_edge_t> forbidden_graph_t; // forbidden graph as signed edge list.
 
 class GraphChecker
@@ -15,15 +17,19 @@ protected:
     long long calls = 0;           // number of times the property was checked
     clock_t time = 0;              // total time for checking the property
     long numberOfAddedClauses = 0; // total number of added clauses
+    uint64_t limit_reached = 0;    // count calls which did not provide a conclusive answer
 
 public:
     void printStats()
     {
-        cout << "Statistics for " << name << ":" << endl;
+        std::cout << "Statistics for " << name << ":" << std::endl;
         std::cout << std::fixed << std::setprecision(4);
         std::cout << "\tCalls: " << calls << std::endl;
         std::cout << "\tTime in seconds: " << ((double)time) / CLOCKS_PER_SEC << std::endl;
         std::cout << "\tAdded clauses: " << numberOfAddedClauses << std::endl;
+        if (limit_reached > 0) {
+          std::cout << "\tLimit reached: " << limit_reached << std::endl;
+        }
     }
 };
 

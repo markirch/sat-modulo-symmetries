@@ -2,12 +2,12 @@
 #define CLINGO_SOLVER_INTERFACE_H
 
 #include <clingo.h>
-#include "solver.hpp"
+#include "sms.hpp"
 
 class ClingoSolver : public GraphSolver
 {
 public:
-    ClingoSolver(configSolver config, cnf_t &cnf);
+    ClingoSolver(SolverConfig &config, cnf_t &cnf);
     ~ClingoSolver() {}
     clingo_propagate_control_t *propagate_control;
     bool clauseAddable;      // true if clause can be added in the current propagation step; false if a conflicting clause was already added
@@ -15,7 +15,7 @@ public:
 
     vector<lit_t> variablesOfSubgraphMapped; // just a list of variables representing the subgraph
 protected:                                   // virtual classes from common interface
-    void solve(vector<int> assumptions);
+    bool solve(vector<int> assumptions);
     bool solve(vector<int> assumptions, int timeout);
     adjacency_matrix_t getAdjacencyMatrix();
     void addClause(const vector<lit_t> &clause, bool redundant);

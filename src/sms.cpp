@@ -1,8 +1,122 @@
 /**
  * Implementation of common parts amongst all solvers
  */
-#include "solver.hpp"
 #include <cmath>
+#include "sms.hpp"
+
+// change the number of vertices in an existing SolverConfig object this way to update all dependencies
+void SolverConfig::set_vertices(int vertices) {
+  this->vertices = vertices;
+  initialPartition = vector<bool>(vertices, false);
+  init_edge_vars();
+  // this is a bit hacky, but it works
+  // for 2 vertices there is no need for SMS because different graphs are non-isomorphic
+  // so vertices == 2 serves as a signifier that we want to construct a non-SMS solver
+  if (vertices == 2) {
+    turnoffSMS = true;
+  }
+}
+
+#ifndef DIRECTED
+void SolverConfig::init_edge_vars() {
+  observedVars.clear();
+  nextFreeVariable = 1;
+  edges = vector<vector<lit_t>>(vertices, vector<lit_t>(vertices, 0));
+  for (int i = 0; i < vertices; i++)
+    for (int j = i + 1; j < vertices; j++)
+    {
+      edges[i][j] = edges[j][i] = nextFreeVariable++;
+      observedVars.push_back(edges[i][j]);
+    }
+}
+
+void SolverConfig::init_multi_edge_vars() { // to be called only after init_edge_vars()
+  edgesMultiple.push_back(edges); // first level coincides with edge-variables
+  // the edges for the first layer have already been created, init the remaining layers
+  for (int x = 1; x < numberOfOverlayingGraphs; x++)
+  {
+    auto next_layer_edges = vector<vector<lit_t>>(vertices, vector<lit_t>(vertices, 0));
+    for (int i = 0; i < vertices; i++)
+      for (int j = i + 1; j < vertices; j++)
+      {
+        next_layer_edges[i][j] = next_layer_edges[j][i] = nextFreeVariable++;
+        observedVars.push_back(next_layer_edges[i][j]);
+      }
+
+    edgesMultiple.push_back(next_layer_edges);
+  }
+}
+#else
+void SolverConfig::init_edge_vars() {
+  observedVars.clear();
+  edges = vector<vector<lit_t>>(vertices, vector<lit_t>(vertices, 0));
+  for (int i = 0; i < vertices; i++)
+    for (int j = 0; j < vertices; j++)
+    {
+      if (i == j)
+        continue;
+      edges[i][j] = nextFreeVariable++;
+      observedVars.push_back(edges[i][j]);
+    }
+}
+
+void SolverConfig::init_multi_edge_vars() { // to be called only after init_edge_vars()
+  // the edges for the first layer have already been created, init the remaining layers
+  for (int x = 1; x < numberOfOverlayingGraphs; x++)
+  {
+    auto next_layer_edges = vector<vector<lit_t>>(vertices, vector<lit_t>(vertices, 0));
+    for (int i = 0; i < vertices; i++)
+      for (int j = 0; j < vertices; j++)
+      {
+        if (i == j)
+          continue;
+        next_layer_edges[i][j] = nextFreeVariable++;
+        observedVars.push_back(edges[i][j]);
+      }
+
+    edgesMultiple.push_back(next_layer_edges);
+  }
+}
+#endif
+
+void SolverConfig::init_intersection_vars(int &minIntersectionVar)
+{
+  edges_intersection_graph = vector<vector<lit_t>>(b_vertices[1], vector<lit_t>(b_vertices[1], 0));
+  for (int i = 0; i < b_vertices[1]; i++)
+    for (int j = i + 1; j < b_vertices[1]; j++)
+      edges_intersection_graph[i][j] = edges_intersection_graph[j][i] = minIntersectionVar++;
+
+  nextFreeVariable = std::max(nextFreeVariable, minIntersectionVar);
+}
+
+void SolverConfig::init_triangle_vars(int triangleVars) {
+  triangles = vector<vector<vector<lit_t>>>(vertices, vector<vector<lit_t>>(vertices, vector<lit_t>(vertices, 0)));
+  int var = nextFreeVariable;
+  if (triangleVars)
+    var = triangleVars;
+  for (int i = 0; i < vertices; i++)
+    for (int j = i + 1; j < vertices; j++)
+      for (int k = j + 1; k < vertices; k++)
+        triangles[i][j][k] = triangles[i][k][j] =
+            triangles[j][i][k] = triangles[j][k][i] =
+                triangles[k][i][j] = triangles[k][j][i] = var++;
+
+  nextFreeVariable = std::max(var, nextFreeVariable);
+}
+
+// transform a forbidden subgraph into a clause which blocks it
+inline clause_t GraphSolver::theClauseThatBlocks(const forbidden_graph_t& fg) {
+    clause_t clause;
+    for (auto signedEdge : fg)
+    {
+      auto edge = signedEdge.second;
+      if (signedEdge.first == truth_value_true)
+        clause.push_back(-edges[edge.first][edge.second]);
+      else // assum that not truth_value_unknown
+        clause.push_back(edges[edge.first][edge.second]);
+    }
+    return clause;
+}
 
 // returns false if a clause was added
 bool GraphSolver::cutoffFunction()
@@ -181,17 +295,7 @@ bool GraphSolver::checkPartiallyDefined(bool isFullyDefined)
   }
   catch (const forbidden_graph_t forbiddenGraph)
   {
-    // trnsform forbidden subgraph into a clause, which blocks this graph
-    clause_t clause;
-    for (auto signedEdge : forbiddenGraph)
-    {
-      auto edge = signedEdge.second;
-      if (signedEdge.first == truth_value_true)
-        clause.push_back(-edges[edge.first][edge.second]);
-      else // assum that not truth_value_unknown
-        clause.push_back(edges[edge.first][edge.second]);
-    }
-    addClause(clause, false); // TODO eventually vector with checkers which are redundant and which are not; only makes sense when supported by Cadical
+    addClause(theClauseThatBlocks(forbiddenGraph), false); // TODO eventually vector with checkers which are redundant and which are not; only makes sense when supported by Cadical
     return false;
   }
 
@@ -253,17 +357,7 @@ bool GraphSolver::checkFullyDefinedGraph(const adjacency_matrix_t &matrix, const
   }
   catch (const forbidden_graph_t forbiddenGraph)
   {
-    // trnsform forbidden subgraph into a clause, which blocks this graph
-    clause_t clause;
-    for (auto signedEdge : forbiddenGraph)
-    {
-      auto edge = signedEdge.second;
-      if (signedEdge.first == truth_value_true)
-        clause.push_back(-edges[edge.first][edge.second]);
-      else // assum that not truth_value_unknown
-        clause.push_back(edges[edge.first][edge.second]);
-    }
-    addClause(clause, false); // TODO eventually vector with checkers which are redundant and which are not; only makes sense when supported by Cadical
+    addClause(theClauseThatBlocks(forbiddenGraph), false); // TODO eventually vector with checkers which are redundant and which are not; only makes sense when supported by Cadical
     return false;
   }
 
@@ -342,6 +436,9 @@ bool GraphSolver::check()
     {
       printAdjacencyMatrix(matrix, config.printFullMatrix);
     }
+
+    if (config.printFullModel)
+      printFullModel();
   }
 
   if (config.allModels)
@@ -420,8 +517,6 @@ void GraphSolver::printStatistics()
   printf("Time in check full graphs: %f\n", ((double)stats.timeCheckFullGraphs) / CLOCKS_PER_SEC);
   printf("Calls of check: %lld\n", stats.callsCheck);
   printf("Calls propagator: %lld\n", stats.callsPropagator);
-  if (config.allModels)
-    printf("Number of models: %d\n", nModels);
   // printEdgeStats();
 
   vector<GraphChecker *> allCheckers;
@@ -440,7 +535,7 @@ bool GraphSolver::solve()
   // solve
   if (!config.quiet)
   {
-    printf("Start solving\n");
+    printf("Starting to solve\n");
     fflush(stdout);
   }
 
@@ -448,7 +543,7 @@ bool GraphSolver::solve()
   int cubeCounter = 0;
   if (!config.cubeFile.empty())
   {
-    ifstream is(config.cubeFile);
+    std::ifstream is(config.cubeFile);
     string line;
     while (getline(is, line))
     {
@@ -469,7 +564,7 @@ bool GraphSolver::solve()
 
       printf("%s\n", line.c_str());
 
-      istringstream iss(line);
+      std::istringstream iss(line);
 
       string lit;
       while (std::getline(iss, lit, ' '))
@@ -514,7 +609,9 @@ bool GraphSolver::solve()
 
     if (!config.quiet)
     {
-      printf("Searched finished\n");
+      printf("Search finished\n");
+      if (config.allModels)
+        printf("Number of solutions: %d\n", nModels);
       printStatistics();
     }
   }
@@ -720,75 +817,3 @@ void GraphSolver::recordGraphStats(const adjacency_matrix_t &matrix)
     }
   }
 }
-
-#ifndef DIRECTED
-void make_edge_vars(configSolver &config)
-{
-  config.edges = vector<vector<lit_t>>(config.vertices, vector<lit_t>(config.vertices, 0));
-  for (int i = 0; i < config.vertices; i++)
-    for (int j = i + 1; j < config.vertices; j++)
-    {
-      config.edges[i][j] = config.edges[j][i] = config.nextFreeVariable++;
-      config.observedVars.push_back(config.edges[i][j]);
-    }
-}
-
-void make_multi_edge_vars(configSolver &config)
-{
-  if (config.numberOfOverlayingGraphs)
-  {
-    for (int x = 0; x < config.numberOfOverlayingGraphs; x++)
-    {
-      auto edges = vector<vector<lit_t>>(config.vertices, vector<lit_t>(config.vertices, 0));
-      for (int i = 0; i < config.vertices; i++)
-        for (int j = i + 1; j < config.vertices; j++)
-        {
-          edges[i][j] = edges[j][i] = config.nextFreeVariable++;
-          config.observedVars.push_back(edges[i][j]);
-        }
-
-      config.edgesMultiple.push_back(edges);
-      if (x == 0)
-        config.edges = edges; // dirty fix to avoid many ifs
-    }
-  }
-}
-
-#else
-void make_edge_vars(configSolver &config)
-{
-  config.edges = vector<vector<lit_t>>(config.vertices, vector<lit_t>(config.vertices, 0));
-  for (int i = 0; i < config.vertices; i++)
-    for (int j = 0; j < config.vertices; j++)
-    {
-      if (i == j)
-        continue;
-      config.edges[i][j] = config.nextFreeVariable++;
-      config.observedVars.push_back(config.edges[i][j]);
-    }
-}
-
-void make_multi_edge_vars(configSolver &config)
-{
-  if (config.numberOfOverlayingGraphs)
-  {
-    for (int x = 0; x < config.numberOfOverlayingGraphs; x++)
-    {
-      auto edges = vector<vector<lit_t>>(config.vertices, vector<lit_t>(config.vertices, 0));
-      for (int i = 0; i < config.vertices; i++)
-        for (int j = 0; j < config.vertices; j++)
-        {
-          if (i == j)
-            continue;
-          config.edges[i][j] = config.nextFreeVariable++;
-          config.observedVars.push_back(config.edges[i][j]);
-        }
-
-      config.edgesMultiple.push_back(edges);
-      if (x == 0)
-        config.edges = edges; // dirty fix to avoid many ifs
-    }
-  }
-}
-
-#endif

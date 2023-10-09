@@ -1,5 +1,5 @@
-#ifndef _FILTER_H_
-#define _FILTER_H_
+#ifndef _CONNECTED_CHECKER_H_
+#define _CONNECTED_CHECKER_H_
 
 #include "useful.h"
 #include "graphChecker.hpp"

@@ -1,4 +1,10 @@
 #include "useful.h"
+#include <numeric>
+#include <string>
+#include <string.h>
+#include <sstream>
+
+using std::string;
 
 void printAdjacencyMatrix(const adjacency_matrix_t &matrix, bool printFullMatrix)
 {
@@ -160,7 +166,7 @@ void file2cnf(std::ifstream &file, cnf_t &cnf, int &maxVar)
       continue;
     if (line[0] == 'p') // skips first line
       continue;
-    istringstream iss(line);
+    std::istringstream iss(line);
 
     string space_delimiter = " ";
 
@@ -168,7 +174,7 @@ void file2cnf(std::ifstream &file, cnf_t &cnf, int &maxVar)
     while (std::getline(iss, lit, ' '))
     {
       int l = stoi(lit);
-      maxVar = max(maxVar, abs(l));
+      maxVar = std::max(maxVar, abs(l));
       if (l == 0)
       {
         cnf.push_back(clause);

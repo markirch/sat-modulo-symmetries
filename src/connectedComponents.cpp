@@ -1,6 +1,9 @@
 #include "minimalityCheck.hpp"
 #include "useful.h"
 
+using std::pair;
+using std::make_pair;
+
 /**
  * @brief checks whether swapping connected components of two colors can decrease the adjacency matrix, unknown edges are assumed to be present for the connected componenets
  *

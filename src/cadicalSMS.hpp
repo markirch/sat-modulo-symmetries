@@ -1,10 +1,12 @@
 #ifndef CADICAL_SOLVER_INTERFACE_H
 #define CADICAL_SOLVER_INTERFACE_H
 
-#include "solver.hpp"
+#include "sms.hpp"
 #include "cadical.hpp"
-#include <bits/stdc++.h>
+#include <deque>
 #include <algorithm>
+
+using std::deque;
 
 class CadicalSolver : public GraphSolver, public CaDiCaL::ExternalPropagator
 {
@@ -16,7 +18,7 @@ private:
     int highestEdgeVariable;
 
     vector<vector<int>> clauses;
-    int highestVariable;
+    int highestVariable = 0;
     int incrementalMode = false; // if true solver has finished and clauses are added by the normal "incremental interface", i.e., adding clauses without observed variables is possible
 
     deque<vector<int>> current_trail;       // for each decision lvl store the assigned literals (only positive version)
@@ -26,17 +28,18 @@ private:
     vector<vector<int>> literal2clausePos; // for each edge variable store clause which was used the last time.
     vector<vector<int>> literal2clauseNeg; // for each negation of an edge variable
 
-    void init(configSolver config, cnf_t &cnf);
+    void init(SolverConfig config, cnf_t &cnf);
 
 public:
     CaDiCaL::Solver *solver;
     CaDiCaL::Solver *universalSolver;
-    CadicalSolver(configSolver config);
-    CadicalSolver(configSolver config, cnf_t &cnf);
-    ~CadicalSolver() { solver->disconnect_external_propagator(); }
+    CadicalSolver(SolverConfig config);
+    CadicalSolver(SolverConfig config, cnf_t &cnf);
+    ~CadicalSolver() { solver->disconnect_external_propagator(); delete solver; }
 
     bool solve(vector<int> assumptions);
     bool solve(vector<int> assumptions, int timeout);
+    void printFullModel(void);
 
 protected: // virtual classes from common interface
     adjacency_matrix_t getAdjacencyMatrix()
@@ -117,6 +120,7 @@ protected: // virtual classes from common interface
         return partition;
     }
 
+public:
     void addClause(const vector<lit_t> &clause, bool)
     {
 
@@ -180,7 +184,7 @@ public:
         if (!clauses.empty())
             return false; // EXIT_UNWANTED_STATE only do check if there isn't another clause to add before
         // this->current_trail = &model;
-        if (config.chechSolutionInProp)
+        if (config.checkSolutionInProp)
         {
             return check();
         }
@@ -189,9 +193,15 @@ public:
 
     bool check_solution()
     {
-        if (!config.chechSolutionInProp)
+        if (!config.checkSolutionInProp)
         {
             incrementalMode = true;
+            vector<int> currentModel;
+            this->model = &currentModel; // TODO have to extract current model because the one from cb_check is deleted
+            for (int i = 1; i <= highestVariable; i++)
+            {
+                currentModel.push_back(solver->val(i));
+            }
             bool res = check();
             incrementalMode = false;
             return res;

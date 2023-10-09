@@ -13,7 +13,7 @@ void MinimalityChecker::checkProperty(const adjacency_matrix_t &matrix)
     }
     catch (LimitReachedException e)
     {
-        printf("Limit reached\n");
+        limit_reached++;
     }
     catch (minimalit_check_result_t e)
     {
@@ -48,7 +48,7 @@ void MultipleMinimalityChecker::checkProperty(const vector<adjacency_matrix_t> &
     }
     catch (LimitReachedException e)
     {
-        printf("Limit reached\n");
+        limit_reached++;
     }
     catch (minimalit_check_result_multi_t e)
     {
@@ -154,7 +154,7 @@ void MinimalityCheckerWithStaticPartition::checkProperty(const adjacency_matrix_
     }
     catch (LimitReachedException e)
     {
-        printf("Limit reached\n");
+        limit_reached++;
     }
     catch (minimalit_check_result_t e)
     {

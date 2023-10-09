@@ -1,5 +1,7 @@
 #include "connectedChecker.hpp"
 
+using std::make_pair;
+
 // only works up to 32 vertices
 
 void ConnectedChecker::checkProperty(const adjacency_matrix_t &matrix)

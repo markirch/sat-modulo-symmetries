@@ -6,8 +6,8 @@ find_package(Boost 1.74.0 REQUIRED COMPONENTS program_options)
 include_directories(${Boost_INCLUDE_DIRS})
 link_libraries(${Boost_LIBRARIES})
 
-set(sources "minimalityCheckCommon.cpp" "solver.cpp" "solveCadicalClass.cpp" "useful.cpp" "connectedComponents.cpp" "coloring.cpp" "connectedChecker.cpp" "planarity.cpp" "coloringCheck.cpp" "forbiddenSubgraph.cpp" "universal.cpp")
-set(clingo_wrapper "solveClingoClass.cpp")
+set(sources "minimalityCheckCommon.cpp" "sms.cpp" "cadicalSMS.cpp" "useful.cpp" "connectedComponents.cpp" "coloring.cpp" "connectedChecker.cpp" "planarity.cpp" "coloringCheck.cpp" "forbiddenSubgraph.cpp" "universal.cpp")
+set(clingo_wrapper "clingoSMS.cpp")
 set(glasgow_wrapper "glasgow_wrapper.cpp")
 
 set(cadical_static_lib "${CMAKE_CURRENT_SOURCE_DIR}/../cadical-master/build/libcadical.a")

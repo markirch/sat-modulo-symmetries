@@ -1,21 +1,23 @@
 #ifndef USEFUL_H
 #define USEFUL_H
 
+#include <vector>
+#include <fstream>
+
+/*
 #include <algorithm>
 #include <utility>
-#include <vector>
 #include <iostream>
 #include <numeric>
 #include <string>
 #include <string.h>
 #include <cassert>
-#include <fstream>
-#include <sstream>
+*/
 
-using namespace std;
+using std::vector;
+//using std::pair;
 
 typedef int lit_t;
-typedef vector<lit_t> vec;
 typedef vector<lit_t> clause_t;
 typedef vector<clause_t> cnf_t;
 typedef vector<vector<lit_t>> edge_vars_t;

@@ -1,7 +1,52 @@
-#include "planarity.hpp"
 #include <boost/graph/boyer_myrvold_planar_test.hpp>
-#include <boost/graph/is_kuratowski_subgraph.hpp>
+//#include <boost/graph/is_kuratowski_subgraph.hpp>
 #include <boost/graph/adjacency_list.hpp>
+
+#include "planarity.hpp"
+
+using std::pair;
+using std::make_pair;
+using std::min, std::max;
+
+vector<pair<int, int>> deleteVerticesWithDegree1(vector<pair<int, int>> &edges)
+{
+    std::unordered_map<int, int> degreeCount;
+
+    // Count the degree of each vertex
+    for (const auto &edge : edges)
+    {
+        degreeCount[edge.first]++;
+        degreeCount[edge.second]++;
+    }
+
+    // Create a new edge list without vertices of degree 1
+    vector<pair<int, int>> newEdges;
+    for (const auto &edge : edges)
+    {
+        if (degreeCount[edge.first] > 1 && degreeCount[edge.second] > 1)
+        {
+            newEdges.push_back(edge);
+        }
+        else
+        {
+            degreeCount[edge.first]--;
+            degreeCount[edge.second]--;
+        }
+    }
+
+    return newEdges;
+}
+
+vector<pair<int, int>> deleteVerticesWithDegree1All(vector<pair<int, int>> edges)
+{
+    auto edgesNew = deleteVerticesWithDegree1(edges);
+    while (edgesNew.size() < edges.size())
+    {
+        edges = edgesNew;
+        edgesNew = deleteVerticesWithDegree1(edges);
+    }
+    return edgesNew;
+}
 
 // returns a K_5 or K_{3,3} subgraph if not planar, otherwise empty list
 vector<pair<int, int>> testPlanarity(const adjacency_matrix_t &m)
@@ -55,7 +100,7 @@ vector<pair<int, int>> testPlanarity(const adjacency_matrix_t &m)
             kurEdges.push_back(make_pair(source(*ki, g), target(*ki, g)));
         }
         // std::cout << std::endl;
-        return kurEdges;
+        return deleteVerticesWithDegree1All(kurEdges);
     }
 }
 
@@ -149,11 +194,14 @@ void ThicknessTwoCheckerMulti::checkProperty(const vector<adjacency_matrix_t> &m
     auto edges = testPlanarity(m1);
     if (!edges.empty())
     {
+        // printf("[");
         vector<forbidden_graph_t> forbiddenGraphs(3);
         for (auto e : edges)
         {
+            // printf("(%d,%d),", e.first, e.second);
             forbiddenGraphs[1].push_back(make_pair(truth_value_true, e));
         }
+        // printf("]\n");
         throw forbiddenGraphs;
     }
 
@@ -161,11 +209,14 @@ void ThicknessTwoCheckerMulti::checkProperty(const vector<adjacency_matrix_t> &m
     edges = testPlanarity(m2);
     if (!edges.empty())
     {
+        // printf("[");
         vector<forbidden_graph_t> forbiddenGraphs(3);
         for (auto e : edges)
         {
-            forbiddenGraphs[2].push_back(make_pair(truth_value_true, make_pair(max(e.first, e.second), min(e.first, e.second))));  // from higher to lower vertex present
+            // printf("(%d,%d),", e.first, e.second);
+            forbiddenGraphs[2].push_back(make_pair(truth_value_true, make_pair(max(e.first, e.second), min(e.first, e.second)))); // from higher to lower vertex present
         }
+        // printf("]\n");
         throw forbiddenGraphs;
     }
 }

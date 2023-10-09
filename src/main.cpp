@@ -5,12 +5,12 @@
 #include <boost/program_options.hpp>
 namespace po = boost::program_options;
 
-#include "solver.hpp"
+#include "sms.hpp"
 #include "planarity.hpp"
 
-#include "solveCadicalClass.hpp"
+#include "cadicalSMS.hpp"
 #ifdef INCLUDE_CLINGO
-#include "solveClingoClass.hpp"
+#include "clingoSMS.hpp"
 #endif
 
 #include "coloring.h"
@@ -51,21 +51,13 @@ clock_t startOfSolving;
 vector<vector<pair<int, int>>> forbiddenSubgraphs; // a list of edge-lists, which give forbidden subgraphs
 bool eliminateAllsubgraphs;
 
-void make_intersection_vars(configSolver &config)
-{
-    config.edges_intersection_graph = vector<vector<lit_t>>(config.b_vertices[1], vector<lit_t>(config.b_vertices[1], 0));
-    for (int i = 0; i < config.b_vertices[1]; i++)
-        for (int j = i + 1; j < config.b_vertices[1]; j++)
-            config.edges_intersection_graph[i][j] = config.edges_intersection_graph[j][i] = minIntersectionVar++;
-
-    config.nextFreeVariable = max(config.nextFreeVariable, minIntersectionVar);
-}
-
 int main(int argc, char const **argv)
 {
     std::ifstream cnfFile;
     std::ifstream dimacsFile;
     std::ifstream forAllFile;
+    std::ifstream forAllFileQCIR;
+    std::ifstream forAllFileQCIRAssumptions;
     std::ifstream forbiddenSubgraphFile;
     std::ifstream forbiddenInducedSubgraphFile;
 
@@ -73,7 +65,7 @@ int main(int argc, char const **argv)
     int minChromaticIndexHypergraph = 0;      // Minimum edge chromatic number of the hypergraph
     pair<int, int> rangeCubesTemp;
 
-    configSolver config = {}; // intialize with 0
+    SolverConfig config;
     config.quiet = false;
 
     // deactivate autoformating for options
@@ -85,6 +77,7 @@ int main(int argc, char const **argv)
       ("hide-graphs", po::bool_switch(&config.hideGraphs), "Count solutions without outputing them (they still have to be enumerated)")
       ("print-full-matrix", po::bool_switch(&config.printFullMatrix), "When printing graphs, print the full adjacency matrix (as opposed to just a list of edges)")
       ("print-fully-defined-graphs", po::bool_switch(&config.printFullyDefinedGraphs), "Print every encountered fully defined graph, even if it does not pass checks")
+      ("print-full-model", po::bool_switch(&config.printFullModel), "Print the full model, i.e., all variable assignments")
       ("print-intermediate-stats", po::bool_switch(&config.printIntermediateStatistic), "Print intermediate statistics")
       ("print-stats", po::bool_switch(&config.printStats), "Print statistics after solving")
       ("print-added-clauses", po::value<std::string>()->notifier([&](const std::string &value)
@@ -133,6 +126,23 @@ int main(int argc, char const **argv)
           std::exit(EXIT_FAILURE);
       } }),
               "File containing an universal property which should be ensured, i.e., the graphs are not allowed to satisfy the existential encoding given by the file.")
+      ("forallQCIR", po::value<std::string>()->notifier([&forAllFileQCIR](const std::string &value)
+                                                           {
+      forAllFileQCIR.open(value);
+      if (forAllFileQCIR.fail()) {
+          std::cerr << "Failed to open forall file." << value << std::endl;
+          std::exit(EXIT_FAILURE);
+      } }),
+              "File containing an universal property which should be ensured encoded with curcuits, i.e., the graphs are not allowed to satisfy the existential encoding given by the file.")
+      ("forallQCIRAssumptions", po::value<std::string>()->notifier([&forAllFileQCIRAssumptions](const std::string &value)
+                                                           {
+      forAllFileQCIRAssumptions.open(value);
+      if (forAllFileQCIRAssumptions.fail()) {
+          std::cerr << "Failed to open forall file for assumptions." << std::endl;
+          std::exit(EXIT_FAILURE);
+      } }),
+              "File containing the existential variables which should be forwarded as assumptions to the universal part.")
+
 
 #ifdef GLASGOW
       ("forbidden-subgraphs", po::value<std::string>()->notifier([&forbiddenSubgraphFile](const std::string &value)
@@ -252,13 +262,16 @@ int main(int argc, char const **argv)
         config.b_vertices[0] = b[0];
         config.b_vertices[1] = b[1];
 
-        config.vertices = config.b_vertices[0] + config.b_vertices[1];
+        config.set_vertices(config.b_vertices[0] + config.b_vertices[1]);
         /* initialize two partitions for the minimality check
          * custom partitions can be specified as well, they will
          * override the setting here. Be cerful to maintain consistency */
-        config.initialPartition = vector<bool>(config.vertices, false);
         config.initialPartition[0] = true;
         config.initialPartition[config.b_vertices[0]] = true;
+    }
+    else
+    {
+        config.set_vertices(config.vertices);
     }
 
     int vertices = config.vertices;
@@ -311,8 +324,6 @@ int main(int argc, char const **argv)
     if (!initialPartitionArguments.empty())
     {
         assert(vertices != 0);
-        if (config.initialPartition.size() == 0)
-            config.initialPartition = std::vector<bool>(vertices, false);
         int curPos = 0;
         for (const int &value : initialPartitionArguments)
         {
@@ -336,8 +347,8 @@ int main(int argc, char const **argv)
 
     printf("Number of vertices: %d\n", vertices);
 
-    if (config.initialPartition.empty())
-        config.initialPartition = vector<bool>(vertices, false);
+    assert(!config.initialPartition.empty());
+    assert(config.initialPartition.size() == vertices);
 
     if (fixedSubgraphSize != 0)
     {
@@ -353,33 +364,28 @@ int main(int argc, char const **argv)
         printf("%d ", b ? 1 : 0);
     printf("\n");
 
-    config.nextFreeVariable = 1;
+    // config.nextFreeVariable = 1;
     cnf_t cnf;
 
-#ifndef DIRECTED
-    // create new variables
     if (config.numberOfOverlayingGraphs)
-        make_multi_edge_vars(config);
-    else
-        make_edge_vars(config);
-    make_intersection_vars(config);
+        config.init_multi_edge_vars();
+
+#ifndef DIRECTED
+    if (minIntersectionVar)
+    {
+        config.init_intersection_vars(minIntersectionVar); // TODO only call when needed?
+        if (!useCadical)
+            for (int i = 0; i < config.b_vertices[1]; i++)
+                for (int j = i + 1; j < config.b_vertices[1]; j++)
+                    cnf.push_back({config.edges_intersection_graph[i][j], -config.edges_intersection_graph[i][j]}); // trivial clauses but need the variables. TODO find better solution
+    }
 
     if (!useCadical)
         for (int i = 0; i < vertices; i++)
             for (int j = i + 1; j < vertices; j++)
                 cnf.push_back({config.edges[i][j], -config.edges[i][j]}); // trivial clauses but need the variables. TODO find better solution
 
-    if (!useCadical)
-        for (int i = 0; i < config.b_vertices[1]; i++)
-            for (int j = i + 1; j < config.b_vertices[1]; j++)
-                cnf.push_back({config.edges_intersection_graph[i][j], -config.edges_intersection_graph[i][j]}); // trivial clauses but need the variables. TODO find better solution
 #else
-    // create new variables
-    if (config.numberOfOverlayingGraphs)
-        make_multi_edge_vars(config);
-    else
-        make_edge_vars(config);
-
     if (!useCadical)
         for (int i = 0; i < vertices; i++)
             for (int j = 0; j < vertices; j++)
@@ -416,19 +422,7 @@ int main(int argc, char const **argv)
 
     if (triangleVersion)
     {
-        config.triangles = vector<vector<vector<lit_t>>>(vertices, vector<vector<lit_t>>(vertices, vector<lit_t>(vertices, 0)));
-        int var = config.nextFreeVariable;
-        if (triangleVars)
-            var = triangleVars;
-        for (int i = 0; i < vertices; i++)
-            for (int j = i + 1; j < vertices; j++)
-                for (int k = j + 1; k < vertices; k++)
-                    config.triangles[i][j][k] = config.triangles[i][k][j] =
-                        config.triangles[j][i][k] = config.triangles[j][k][i] =
-                            config.triangles[k][i][j] = config.triangles[k][j][i] = var++;
-
-        config.nextFreeVariable = max(var, config.nextFreeVariable);
-
+        config.init_triangle_vars(triangleVars);
         if (!useCadical)
             for (int i = 0; i < vertices; i++)
                 for (int j = i + 1; j < vertices; j++)
@@ -570,9 +564,44 @@ int main(int argc, char const **argv)
             for (int j = i + 1; j < vertices; j++)
             {
                 forAllAsumptions.push_back(config.edges[i][j]);
-                nextFreeVariableUniversal = max(nextFreeVariableUniversal, config.edges[i][j] + 1); // highest variable used in encoding and as assumptions
             }
         solver->addComplexFullyDefinedGraphChecker(new UniversalChecker(forAllFile, forAllAsumptions));
+    }
+
+    if (forAllFileQCIR.is_open())
+    {
+        // assumptions are either the edge variables or specified in a seperate file
+        if (forAllFileQCIRAssumptions.is_open())
+        {
+            std::string line;
+            if (std::getline(forAllFileQCIRAssumptions, line))
+            {
+                std::istringstream iss(line);
+                int num;
+                while (iss >> num)
+                    forAllAsumptions.push_back(num);
+
+                // Now, the 'integers' vector contains all the integers from the first line
+                // for (int num : forAllAsumptions)
+                //     std::cout << num << " ";
+                // std::cout << std::endl;
+            }
+            else
+            {
+                std::cerr << "The file is empty." << std::endl;
+            }
+            forAllFileQCIRAssumptions.close();
+        }
+        else
+        {
+            // !!!!!!!not for digraphs yet
+            for (int i = 0; i < vertices; i++)
+                for (int j = i + 1; j < vertices; j++)
+                {
+                    forAllAsumptions.push_back(config.edges[i][j]);
+                }
+        }
+        solver->addComplexFullyDefinedGraphChecker(new UniversalCheckerQCIR(forAllFileQCIR, forAllAsumptions));
     }
 
     if (greedyColoring)

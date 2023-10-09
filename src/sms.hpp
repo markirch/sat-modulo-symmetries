@@ -1,83 +1,120 @@
 #ifndef SOLVE_GENERAL_H
 #define SOLVE_GENERAL_H
 
+#include <cassert>
+
 #include "useful.h"
 #include "graphChecker.hpp"
 #include "minimalityCheck.hpp"
 
-#define COUNT_ASSIGNED 0
+using std::pair;
+using std::string;
 
-typedef struct
+enum
 {
-  int vertices;
-  bool printStats;
-  bool printIntermediateStatistic;
-  bool hideGraphs;
-  bool allModels;
-  bool printFullMatrix;
+  COUNT_ASSIGNED = 0,
+  COUNT_ASSIGNED_WEIGHTED = 1,
+};
 
-  bool bipartite;
-  int b_vertices[2]; // if dealing with bipartite graphs (like incidence graphs of hypergraphs), these are the partition sizes
-  bool hypermode;    // for hypergraphs and hyperspace travel
+class SolverConfig
+{
+public:
+  int vertices = 2;
+  bool printStats = false;
+  bool printIntermediateStatistic = false;
+  bool hideGraphs = false;
+  bool allModels = false;
+  bool printFullMatrix = false;
+  bool printFullModel = false;
+
+  bool bipartite = false;
+  int b_vertices[2];      // if dealing with bipartite graphs (like incidence graphs of hypergraphs), these are the partition sizes
+  bool hypermode = false; // for hypergraphs and hyperspace travel
 
   vector<int> observedVars; // all observed variables
 
-  bool turnOffInprocessing;
-  bool printFullyDefinedGraphs;
+  bool turnOffInprocessing = false;
+  bool printFullyDefinedGraphs = false;
+  int printPartiallyDefined = 0;
 
-  int assignmentScoring;           // 0 = count the nubmer of assigned variables ; 1 = estimate the search space cut via recorded frequences
-  int assignmentCutoff;            // create cube when a certain number of vertex pairs is decided whether the are and edge
-  int assignmentCutoffPrerun;      // Number of calls of propagator before assignmentCutoff is activated
-  long assignmentCutoffPrerunTime; // Seconds before calling assignmentCutoff
+  int assignmentScoring = COUNT_ASSIGNED;
+  int assignmentCutoff = 0;            // create a cube when the assignment score exceeds this
+  int assignmentCutoffPrerun = 0;      // number of calls of propagator before assignmentCutoff is activated
+  long assignmentCutoffPrerunTime = 0; // time in seconds before assignmentCutoff is activated
 
-  bool chechSolutionInProp = true; // check solution in the propagator and continous search without restart; not applicable for more complex propagators use the incremental interface
-  bool propagateLiteralsCadical;   // whether only literals should be propagated and clauses added at conflict analysis
-  bool irredundantSymClauses;      // don't let the symmetry breaking clauses be part of the clause deletion policy
+  bool checkSolutionInProp = true;       // check solution in the propagator and continue search without restarting; for more complex propagators, use the incremental interface
+  bool propagateLiteralsCadical = false; // whether only literals should be propagated and clauses added at conflict analysis
+  bool irredundantSymClauses = false;    // prevent symmetry breaking clauses from being deleted on clause DB cleanup
 
-  bool non010colorable; // TODO get ride of as config parameter
+  bool non010colorable = false; // TODO get rid of as config parameter
 
   string proofFile;
 
   string cubeFile;           // name of file containing cubes
   pair<int, int> rangeCubes; // solve all cubes between rangeCubes.fist and rangeCubes.second;
 
-  int timeout; // timeout in seconds (for each cube)
+  int timeout = 0; // timeout in seconds (for each cube)
 
-  bool hyperedgeColoring; // also excludes intersection graph
+  bool hyperedgeColoring = false; // also excludes intersection graph
 
   vector<pair<int, int>> intervallsColoring; // intervalls for partitions based on coloring
-
-  int printPartiallyDefined;
 
   vector<vector<lit_t>> edges;                    // edges to variables
   vector<vector<lit_t>> edges_intersection_graph; // edges of intersection graph to variables
   vector<vector<lit_t>> staticPartition;          // variables indicating whether two vertices are in the same partition
   vector<vector<vector<lit_t>>> triangles;        // variables indicating whether triangle is present
 
-  int numberOfOverlayingGraphs; // generate multiple graphs at once (can also bee seen as edge coloring given by the different level)
+  int numberOfOverlayingGraphs = 0;            // generate multiple graphs at once (can also bee seen as edge coloring given by the different level)
   vector<vector<vector<lit_t>>> edgesMultiple; // edge variables of several graphs
 
-  int nextFreeVariable;
+  int nextFreeVariable = 1;
 
-  FILE *symBreakClausesFile;
-  FILE *addedClauses;
-  FILE *addedColoringClauses;
+  FILE *symBreakClausesFile = NULL;
+  FILE *addedClauses = NULL;
+  FILE *addedColoringClauses = NULL;
 
   bool quiet = true; // don't print any output
 
   // symmetry breaking related part
 #define DEFAULT_FREQUENCY 20
   int frequency = DEFAULT_FREQUENCY;
-  int cutoff;                               // cutoff for minimality check
+  int cutoff = 0;                           // cutoff for minimality check
   vector<bool> initialPartition;            // initial partition for minimality check
   int frequencyConnectedComponentsSwap = 0; // based on a special coloring encoding
-  bool turnoffSMS;
-  bool combineStaticPlusDynamic; // start dynamic symmetry breaking with ordered partition implicitely given by some boolean variables.
+  bool turnoffSMS = false;
+  bool combineStaticPlusDynamic = false; // start dynamic symmetry breaking with ordered partition implicitely given by some boolean variables.
   vector<vector<vertex_t>> initialVertexOrderings;
-} configSolver;
 
-void make_edge_vars(configSolver &config);
-void make_multi_edge_vars(configSolver &config);
+  // DEFAULT CONSTRUCTORS
+
+  // without any arguments, construct a dummy config that turns off SMS
+  // and essentially acts like an ordinary SAT solver
+  // WARNING: there must be at least 2 vertices, otherwise there's no edge and a segfault
+
+  SolverConfig(int vertices = 2)
+  {
+    assert(vertices >= 2);
+    set_vertices(vertices);
+    if (vertices == 2)
+    {
+      turnoffSMS = true;
+    }
+  }
+
+  SolverConfig(int vertices, int cutoff) : cutoff(cutoff) {
+    set_vertices(vertices);
+  }
+
+  // change the number of vertices in an existing SolverConfig object this way to update all dependencies
+  void set_vertices(int vertices);
+
+  void init_edge_vars();
+  void init_multi_edge_vars(); // to be called only after init_edge_vars()
+  void init_triangle_vars(int triangleVars = 0);
+  void init_intersection_vars(int &minIntersectionVar);
+};
+
+void make_multi_edge_vars(SolverConfig &config);
 
 typedef struct
 {
@@ -93,7 +130,7 @@ class GraphSolver
 {
 public:
   bool solve(); // TODO suitable return value;
-  GraphSolver(configSolver config)
+  GraphSolver(SolverConfig &config)
   {
     stats.start = clock();
     this->config = config;
@@ -113,7 +150,7 @@ public:
             basicVertexOrdering.push_back(i);
           config.initialVertexOrderings.push_back(basicVertexOrdering);
         }
-        
+
         auto checker = new MultipleMinimalityChecker(config.frequency, config.initialPartition, config.initialVertexOrderings, config.cutoff, config.symBreakClausesFile);
         this->partiallyDefinedMultiGraphCheckers.push_back(checker);
       }
@@ -161,7 +198,7 @@ public:
     if (!checker->addsOnlyObservedLiterals)
     {
       printf("Warning: uses incremental interface for adding clauses from special propagator\n");
-      config.chechSolutionInProp = false;
+      config.checkSolutionInProp = false;
     }
     complexFullyDefinedGraphCheckers.push_back(checker);
   }
@@ -171,6 +208,8 @@ public:
     partiallyDefinedMultiGraphCheckers.push_back(checker);
   }
 
+  clause_t theClauseThatBlocks(const forbidden_graph_t &);
+
   vector<vector<lit_t>> edges; // edges to variables
 
   vector<vector<lit_t>> edge_stats;
@@ -178,6 +217,7 @@ public:
   statistics stats = {}; // default value initialization
 
   int nextFreeVariable;
+  SolverConfig config;
 
 private:
   vector<PartiallyDefinedGraphChecker *> partiallyDefinedGraphCheckers;
@@ -187,7 +227,6 @@ private:
   vector<PartiallyDefinedMultiGraphChecker *> partiallyDefinedMultiGraphCheckers;
 
 protected:
-  configSolver config;
   int vertices;
 
   int nModels = 0;
@@ -197,11 +236,12 @@ protected:
   virtual bool solve(vector<int> assumptions) = 0;              // solve the formula under the assumption
   virtual bool solve(vector<int> assumptions, int timeout) = 0; // solve with a given timeout; return false if timeout was reached
 
-  virtual void addClause(const vector<lit_t> &clause, bool redundant) = 0;
   virtual adjacency_matrix_t getAdjacencyMatrix() = 0;
   virtual vector<adjacency_matrix_t> getAdjacencyMatrixMultiple() = 0;
   virtual vector<truth_value_t> &getCurrentAssignemnt() = 0;
   virtual vector<vector<truth_value_t>> getStaticPartition() = 0;
+
+  virtual void printFullModel() = 0;
 
   void recordGraphStats(const adjacency_matrix_t &matrix);
   void initEdgeMemory();
@@ -218,6 +258,7 @@ private:
 public:
   bool propagate(); // Check state of partial assignment and add clauses if necessary; returns true if no clause was added otherwise false
   bool check();     // prints and excludes graph from search space; returns true if no clause was added otherwise false
+  virtual void addClause(const vector<lit_t> &clause, bool redundant) = 0;
 };
 
 #endif

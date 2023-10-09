@@ -1,3 +1,5 @@
+#include <cassert>
+#include <numeric>
 #include "coloringCheck.hpp"
 
 void SubgraphChromaticNumberChecker::checkProperty(const adjacency_matrix_t &matrix)
@@ -184,9 +186,9 @@ void Non010colorableChecker::checkProperty(const adjacency_matrix_t &matrix, con
                     {
                         if (coloring[i] != coloring[j])
                         {
-                            swap(coloring[i], coloring[j]);
+                            std::swap(coloring[i], coloring[j]);
                             clauses.push_back(get010ColoringClause(coloring, vertices, edges, triangleVars));
-                            swap(coloring[i], coloring[j]); // undo
+                            std::swap(coloring[i], coloring[j]); // undo
                         }
                     }
             }
@@ -347,8 +349,8 @@ void GreedyColoring::checkProperty(const adjacency_matrix_t &matrix, const vecto
                 for (int c = 0; c < chi - 1; c++)
                 {
 
-                    int v1 = min(vertexOrdering[i], vertexOrdering[j]);
-                    int v2 = max(vertexOrdering[i], vertexOrdering[j]);
+                    int v1 = std::min(vertexOrdering[i], vertexOrdering[j]);
+                    int v2 = std::max(vertexOrdering[i], vertexOrdering[j]);
                     clauses.push_back({edges[v1][v2], -adjacentAndColorC[i][j][c]});  // not truth_value_true implies not truth_value_true and color c
                     clauses.push_back({coloring[i][c], -adjacentAndColorC[i][j][c]}); // not truth_value_true implies not truth_value_true and color c
                     clauses.push_back({-edges[v1][v2], -coloring[i][c], adjacentAndColorC[i][j][c]});

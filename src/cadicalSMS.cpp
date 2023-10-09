@@ -1,9 +1,8 @@
 #include "useful.h"
-#include "solveCadicalClass.hpp"
+#include "cadicalSMS.hpp"
 #include "cadical.hpp"
-#include "coloring.h"
 
-void CadicalSolver::init(configSolver config, cnf_t &cnf)
+void CadicalSolver::init(SolverConfig config, cnf_t &cnf)
 {
     // The root-level of the trail is always there
     current_trail.push_back(std::vector<int>());
@@ -48,6 +47,7 @@ void CadicalSolver::init(configSolver config, cnf_t &cnf)
     literal2clausePos = vector<vector<int>>(highestObservedVariables + 1);
     literal2clauseNeg = vector<vector<int>>(highestObservedVariables + 1);
 
+    highestVariable = std::max(highestVariable, highestObservedVariables);
     // add clauses to solver
     for (auto clause : cnf)
     {
@@ -58,6 +58,7 @@ void CadicalSolver::init(configSolver config, cnf_t &cnf)
         {
             if (lit == 0)
                 EXIT_UNWANTED_STATE
+            highestVariable = std::max(highestVariable, abs(lit));
             solver->add(lit);
         }
         solver->add(0);
@@ -72,12 +73,12 @@ void CadicalSolver::init(configSolver config, cnf_t &cnf)
 }
 
 // add formula and register propagator
-CadicalSolver::CadicalSolver(configSolver config, cnf_t &cnf) : GraphSolver(config)
+CadicalSolver::CadicalSolver(SolverConfig config, cnf_t &cnf) : GraphSolver(config)
 {
     init(config, cnf);
 }
 
-CadicalSolver::CadicalSolver(configSolver config) : GraphSolver(config)
+CadicalSolver::CadicalSolver(SolverConfig config) : GraphSolver(config)
 {
     cnf_t cnf; // empty cnf
     init(config, cnf);
@@ -109,6 +110,16 @@ bool CadicalSolver::solve(vector<int> assumptions)
         if (check_solution()) // true if no clause was added
             return true;
     } while (true);
+}
+
+void CadicalSolver::printFullModel()
+{
+    printf("Model: ");
+    for (int i = 1; i < highestVariable; i++)
+    {
+        printf("%d ", solver->val(i));
+    }
+    printf("\n");
 }
 
 bool CadicalSolver::solve(vector<int>, int)

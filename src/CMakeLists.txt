@@ -41,6 +41,14 @@ target_link_libraries(smsg PRIVATE sms)
 target_link_libraries(smsd PRIVATE smsdir)
 
 install(TARGETS smsg smsd sms smsdir)
+install(FILES "${cadical_static_lib}" DESTINATION lib)
+install(FILES "sms.hpp" "cadical.hpp" "cadicalSMS.hpp" "useful.h" "graphChecker.hpp" "minimalityCheck.hpp" DESTINATION include/sms)
+if (Clinfo_FOUND)
+	if (USE_CLINGO)
+		install(FILES "clingoSMS.hpp" DESTINATION include/sms)
+	endif()
+endif()
+
 
 # commands for adding Z3
 # target_include_directories(graphgen PRIVATE ${Z3_CXX_INCLUDE_DIRS})

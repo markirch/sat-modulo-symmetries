@@ -10,7 +10,7 @@ set(sources "minimalityCheckCommon.cpp" "sms.cpp" "cadicalSMS.cpp" "useful.cpp" 
 set(clingo_wrapper "clingoSMS.cpp")
 set(glasgow_wrapper "glasgow_wrapper.cpp")
 
-set(cadical_static_lib "${CMAKE_CURRENT_SOURCE_DIR}/../cadical-master/build/libcadical.a")
+set(cadical_static_lib "${CMAKE_CURRENT_SOURCE_DIR}/../cadical/build/libcadical.a")
 link_libraries("${cadical_static_lib}")
 
 # -O3 not needed, because it is implied by CMAKE_BUILD_TYPE=Release (which is the default)

@@ -57,14 +57,14 @@ Similar, we can check the FB Conjecture using the same script and the argument `
 
 ## Planar graphs, Earth-Moon Problem, planar Turan Numbers and generation of OEIS integer sequences related to planar graphs
 
-To enumerate planar graphs with different encodings, 
-we used the script `./encodings/planar.py` with the following commands:
+To enumerate planar graphs, using different encodings, 
+use `./encodings/planar.py` with the following commands (`$n` stands for the number of vertices):
 
 <ul>
   <li>Kuratowski based encoding:
 
 ```bash
-python ./pysms/graph_builder.py -v $n --all-graphs --planar
+python -m pysms.graph_builder.py -v $n --all-graphs --planar
 ```
 
     In this case, the planarity is not part of the encoding but rather forwarded to the SMS solver, and checked with a frequency of 1/5, i.e., only every 5th time, we check if the partially defined graph is planar. If not a suitable clause is added.

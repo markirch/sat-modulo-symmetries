@@ -1,4 +1,4 @@
-def counterFunction(variables, countUpto, vPool, clauses, atMost=None, atLeast=None, type="sequential"):
+def counterFunction(variables, countUpto, vPool, clauses, atMost=None, atLeast=None, type="sequential") -> list[int]:
     # assert(countUpto > 0)
     if atMost != None:
         assert atMost >= 0
@@ -18,7 +18,7 @@ def counterFunction(variables, countUpto, vPool, clauses, atMost=None, atLeast=N
         raise ValueError("Invalid counter")
 
 
-def seqCounter(variables, countUpto, vPool, clauses, atMost=None, atLeast=None):
+def seqCounter(variables, countUpto, vPool, clauses, atMost=None, atLeast=None) -> list[int]:
     n = len(variables)
     counterVariables = [[vPool.id() for _ in range(countUpto)] for _ in range(n)]  # Create new variables
     # print("c\t" + str(counterVariables))
@@ -46,7 +46,7 @@ def seqCounter(variables, countUpto, vPool, clauses, atMost=None, atLeast=None):
     return [counterVariables[n - 1][j] for j in range(countUpto)]
 
 
-def totalizerRec(variables, countUpto, vPool, clauses, atmost=None):
+def totalizerRec(variables, countUpto, vPool, clauses, atmost=None) -> list[int]:
     falseLiteral = vPool.id()
     clauses.append([-falseLiteral])
     if len(variables) == 1:
@@ -73,7 +73,7 @@ def totalizerRec(variables, countUpto, vPool, clauses, atmost=None):
     return newCounterVariables
 
 
-def shouldBe(variables, possibleValues, vpool, clauses, type="sequential"):
+def shouldBe(variables, possibleValues, vpool, clauses, type="sequential") -> None:
     countUpto = max(possibleValues) + 1
     counter_vars = counterFunction(variables, countUpto, vpool, clauses, type=type)
     select_output = [vpool.id() for _ in possibleValues]

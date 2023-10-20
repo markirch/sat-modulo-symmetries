@@ -253,12 +253,12 @@ private:
   bool cutoffFunction(); // If certain number of edge variables is assigned, a cube will be generated
   bool checkPartiallyDefined(bool isFullyDefined);
   bool checkFullyDefinedGraph(const adjacency_matrix_t &matrix, const vector<int> &model); // check the property of the fully defined graph, given the model
-  void printStatistics();
 
 public:
   bool propagate(); // Check state of partial assignment and add clauses if necessary; returns true if no clause was added otherwise false
   bool check();     // prints and excludes graph from search space; returns true if no clause was added otherwise false
   virtual void addClause(const vector<lit_t> &clause, bool redundant) = 0;
+  void printStatistics();
 };
 
 #endif

@@ -70,6 +70,8 @@ void CadicalSolver::init(SolverConfig config, cnf_t &cnf)
             fprintf(config.addedClauses, "0\n");
         }
     }
+
+    initEdgeMemory();
 }
 
 // add formula and register propagator
@@ -86,7 +88,6 @@ CadicalSolver::CadicalSolver(SolverConfig config) : GraphSolver(config)
 
 bool CadicalSolver::solve(vector<int> assumptions)
 {
-    initEdgeMemory();
     do
     {
         for (auto lit : assumptions)

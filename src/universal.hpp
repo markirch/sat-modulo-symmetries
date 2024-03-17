@@ -50,7 +50,7 @@ class UniversalCheckerQCIR : public ComplexFullyDefinedGraphChecker
 
     vector<bool> isGate;        // tells whether it is a gate or not
     vector<bool> isExistential; // tells whether it is a existential variable or not
-    vector<int> gate2index;     // given a gate, gate the corresponding index in the gateVariables vector
+    vector<int> gate2index;     // given a gate, get the corresponding index in the gateVariables vector
 
 public:
     // file contains the encoding in dimacs format

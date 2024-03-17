@@ -26,6 +26,7 @@ public:
   bool allModels = false;
   bool printFullMatrix = false;
   bool printFullModel = false;
+  vector<int> assumptions; // solve under the following assumption
 
   bool bipartite = false;
   int b_vertices[2];      // if dealing with bipartite graphs (like incidence graphs of hypergraphs), these are the partition sizes
@@ -67,7 +68,7 @@ public:
   int numberOfOverlayingGraphs = 0;            // generate multiple graphs at once (can also bee seen as edge coloring given by the different level)
   vector<vector<vector<lit_t>>> edgesMultiple; // edge variables of several graphs
 
-  int nextFreeVariable = 1;
+  int nextFreeVariable = 1; // next variable which is neither in the encoding nor observed
 
   FILE *symBreakClausesFile = NULL;
   FILE *addedClauses = NULL;
@@ -101,7 +102,8 @@ public:
     }
   }
 
-  SolverConfig(int vertices, int cutoff) : cutoff(cutoff) {
+  SolverConfig(int vertices, int cutoff) : cutoff(cutoff)
+  {
     set_vertices(vertices);
   }
 
@@ -113,8 +115,6 @@ public:
   void init_triangle_vars(int triangleVars = 0);
   void init_intersection_vars(int &minIntersectionVar);
 };
-
-void make_multi_edge_vars(SolverConfig &config);
 
 typedef struct
 {
@@ -217,7 +217,9 @@ public:
   statistics stats = {}; // default value initialization
 
   int nextFreeVariable;
+
   SolverConfig config;
+  vector<truth_value_t> currentAssignment; // currentAssignment[v] gives the truthvalue of variable v (if observed)
 
 private:
   vector<PartiallyDefinedGraphChecker *> partiallyDefinedGraphCheckers;
@@ -236,17 +238,18 @@ protected:
   virtual bool solve(vector<int> assumptions) = 0;              // solve the formula under the assumption
   virtual bool solve(vector<int> assumptions, int timeout) = 0; // solve with a given timeout; return false if timeout was reached
 
-  virtual adjacency_matrix_t getAdjacencyMatrix() = 0;
-  virtual vector<adjacency_matrix_t> getAdjacencyMatrixMultiple() = 0;
-  virtual vector<truth_value_t> &getCurrentAssignemnt() = 0;
-  virtual vector<vector<truth_value_t>> getStaticPartition() = 0;
-
   virtual void printFullModel() = 0;
 
   void recordGraphStats(const adjacency_matrix_t &matrix);
   void initEdgeMemory();
   void initTriangleMemory();
   void printEdgeStats();
+
+protected: // virtual classes from common interface
+  adjacency_matrix_t getAdjacencyMatrix();
+  vector<adjacency_matrix_t> getAdjacencyMatrixMultiple();
+  vector<truth_value_t> &getCurrentAssignemnt() { return currentAssignment; }
+  vector<vector<truth_value_t>> getStaticPartition();
 
   // functions which are the same for all solvers, which use the previous funcitons
 private:

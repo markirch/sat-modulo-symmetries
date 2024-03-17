@@ -11,7 +11,7 @@ void createClause(vertex_ordering_t &vertices, adjacency_matrix_t &adjacency_mat
 
 // TODO replace with vector function
 int getElementFromArray(int *array, int n, int elem);
-void checkIfPartition(vertex_ordering_t &vertices);
+// void checkIfPartition(vertex_ordering_t &vertices);
 
 void checkMinimality(adjacency_matrix_t &adjacency_matrix, vertex_ordering_t vertex_ordering, minimalit_check_config_t config)
 {
@@ -55,7 +55,6 @@ void isMinimal(vertex_ordering_t vertices, partition_t partition, int row, adjac
 // Adapt the partition according the selected vertex for the row
 void isMinimalVertex(vertex_ordering_t vertices, partition_t partition, int row, adjacency_matrix_t &adjacency_matrix, minimalit_check_config_t config, int &count)
 {
-
     vertex_t n = adjacency_matrix.size();
     vertex_t vertex = vertices[row];
     vertex_t col = row + 1; // current column
@@ -412,16 +411,16 @@ void createClause(vertex_ordering_t &vertices, adjacency_matrix_t &adjacency_mat
 // ------------------Functions for debugging ----------------------------------
 
 // check if all vertices are contained
-void checkIfPartition(std::vector<vertex_t> vertices)
-{
-    std::vector<bool> reached(vertices.size(), false);
-    for (vertex_t i = 0; i < (vertex_t)vertices.size(); i++)
-        reached[vertices[i]] = true; // mark each found vertex to true
+// void checkIfPartition(std::vector<vertex_t> vertices)
+// {
+//     std::vector<bool> reached(vertices.size(), false);
+//     for (vertex_t i = 0; i < (vertex_t)vertices.size(); i++)
+//         reached[vertices[i]] = true; // mark each found vertex to true
 
-    if (std::any_of(reached.begin(), reached.end(), [](auto x)
-                    { return !x; })) // check if no doubles
-        EXIT_UNWANTED_STATE
-}
+//     if (std::any_of(reached.begin(), reached.end(), [](auto x)
+//                     { return !x; })) // check if no doubles
+//         EXIT_UNWANTED_STATE
+// }
 
 void checkMinimalityMultiple(vector<adjacency_matrix_t> &, vertex_ordering_t, minimalit_check_config_t)
 {

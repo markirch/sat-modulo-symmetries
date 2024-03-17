@@ -11,7 +11,7 @@ void createClause(vertex_ordering_t &vertices, adjacency_matrix_t &adjacency_mat
 
 // TODO replace with vector function
 int getElementFromArray(int *array, int n, int elem);
-void checkIfPartition(vertex_ordering_t &vertices);
+// void checkIfPartition(vertex_ordering_t &vertices);
 
 void checkMinimality(adjacency_matrix_t &adjacency_matrix, vertex_ordering_t vertex_ordering, minimalit_check_config_t config)
 {
@@ -375,16 +375,16 @@ void createClause(vertex_ordering_t &vertices, adjacency_matrix_t &adjacency_mat
 // ------------------Functions for debugging ----------------------------------
 
 // check if all vertices are contained
-void checkIfPartition(std::vector<vertex_t> vertices)
-{
-    std::vector<bool> reached(vertices.size(), false);
-    for (vertex_t i = 0; i < (vertex_t)vertices.size(); i++)
-        reached[vertices[i]] = true; // mark each found vertex to true
+// void checkIfPartition(std::vector<vertex_t> vertices)
+// {
+//     std::vector<bool> reached(vertices.size(), false);
+//     for (vertex_t i = 0; i < (vertex_t)vertices.size(); i++)
+//         reached[vertices[i]] = true; // mark each found vertex to true
 
-    if (std::any_of(reached.begin(), reached.end(), [](auto x)
-                    { return !x; })) // check if no doubles
-        EXIT_UNWANTED_STATE
-}
+//     if (std::any_of(reached.begin(), reached.end(), [](auto x)
+//                     { return !x; })) // check if no doubles
+//         EXIT_UNWANTED_STATE
+// }
 
 // ------------------------------------ version with multiple graphs over the same vertex set. Minimal by the following ordering: first row of first graph, first row of second graph first row of third graph,..., second row of first graph,...
 

@@ -9,6 +9,8 @@ import argparse
 import os
 from sys import *
 from ast import literal_eval
+import math
+import numpy as np
 
 
 def getDefaultParser():
@@ -33,7 +35,8 @@ def getDefaultParser():
     solve_args.add_argument("--all-graphs", "-a", action="store_true", help="generate all graphs (without this, the solver will exit after the first solution)")
     solve_args.add_argument("--hide-graphs", "-hg", action="store_true", help="do not display graphs (meant as a counting functionality, though the graphs still need to be enumerated)")
     solve_args.add_argument("--args-SMS", type=str, default="", help="command line to be appended to the call to smsg/smsd (see src/main.cpp or README.md)")
-    solve_args.add_argument("--graph-format", choices=['edge-list','graph6'], default=None, help="output format of graphs")
+    solve_args.add_argument("--graph6-format", action="store_true", help="output graphs in graph6 format (Warning: Relatively slow)")
+    # solve_args.add_argument("--graph-format", choices=["edge-list", "graph6"], default=None, help="output format of graphs. (Warning: Relatively slow)")
 
     # number of edges
     constraint_args.add_argument("--num-edges-upp", "-E", type=int, help="upper bound on the maximum number of edges")
@@ -65,7 +68,19 @@ def getDefaultParser():
     constraint_args.add_argument("--planar-kuratowski", "--planar", "-p", action="store_true", help="generate only planar graphs (not encoded to CNF, needs SMS)")
     constraint_args.add_argument("--connectivity-low", "-c", "--kappa-low", default=0, type=int, help="lower bound on vertex connectivity")  # TODO handle in SMS
     constraint_args.add_argument("--diam2-critical", action="store_true", help="assert a diameter-2-critical graph")
+    constraint_args.add_argument("--color-critical", type=int, help="assert that deletion of any vertex makes the graph colorable with k-1 colors")
 
+    constraint_args.add_argument("--fix-k-clique", type=int, help="the first k vertices are a clique (further it refines the initial partition)")
+
+    constraint_args.add_argument("--circulant", action="store_true", help="ensure that graph is circulant and turnoff SMS")
+    constraint_args.add_argument("--block-circulant", type=int, help="ensure that graph is block circulant with the given number of blocks and turnoff SMS")
+    constraint_args.add_argument("--contains-cliques", type=int, nargs=2, help="ensures that the graph contains k cliques of size l and each edge is part of such a clique")
+    constraint_args.add_argument("--partial-sym-break", action="store_true", help="break symmetry by considering swapping all pairs of vertices")
+    constraint_args.add_argument("--bcp", action="store_true", help="apply bcp at the end of the encoding; not implemented very performant")
+    constraint_args.add_argument("--exclude-balanced-bipartite-graph", action="store_true", help="exclude balanced bipartite graphs (only the once passing the static symmetry breaking)")
+
+    constraint_args.add_argument("--fixed-induced-subgraph", type=str, help="file containing the fixed induced subgraph")
+    constraint_args.add_argument("--fixed-induced-subgraph-line", type=int, help="choose line which is selected as induced subgraph")
     return parser
 
 
@@ -200,7 +215,7 @@ class GraphEncodingBuilder(IDPool, list):
         """
         return self.varStaticInitialPartition[u][v]
 
-    def solve(self, allGraphs=False, hideGraphs=False, cnfFile=None, args_SMS="", forwarding_args=[], graph_format=None) -> None:
+    def solve(self, allGraphs=False, hideGraphs=False, cnfFile=None, args_SMS="", forwarding_args=[], graph6_format=False) -> None:
         """Solve the formula, given the encoding, using SMS.
 
         :param allGraphs: Enumerate all satisfying graphs. Default value = False
@@ -212,7 +227,9 @@ class GraphEncodingBuilder(IDPool, list):
 
         """
         if cnfFile == None:
-            cnfFile = f"./temp{os.getpid()}.enc"  # TODO use tempfile module
+            import time
+
+            cnfFile = f"./temp{os.getpid()}_t{time.time()}.enc"  # TODO use tempfile module
         with open(cnfFile, "w") as cnf_fh:
             self.print_dimacs(cnf_fh)  # write script to temporary file
 
@@ -237,24 +254,19 @@ class GraphEncodingBuilder(IDPool, list):
         if self.DEBUG:
             print("running the command: ", sms_command)
 
-        if graph_format:
-            assert(graph_format in ['edge-list','graph6'])
-            if graph_format == 'graph6':
-                import networkx as nx
+        if graph6_format:
+            import networkx as nx
+
             for line in os.popen(sms_command).read().split("\n"):
-                if line and line[0] == '[':
+                if line and line[0] == "[":
                     edges = literal_eval(line)
-                    if graph_format == 'graph6':
-                        print(nx.to_graph6_bytes(nx.Graph(edges),header=False).decode(),end="")
-                    if graph_format == 'edge-list':
-                        print(edges)
+                    print(nx.to_graph6_bytes(nx.Graph(edges), header=False).decode(), end="")
                 elif self.DEBUG:
-                    print(line,end="\n")
+                    print(line, end="\n")
         else:
             os.system(sms_command)
 
-        os.system(f"rm {cnfFile}") # cleanup
-
+        os.system(f"rm {cnfFile}")  # cleanup
 
     def solveArgs(self, args, forwarding_args) -> None:
         """Wrapper for solving using arguments provided by argsParser
@@ -263,7 +275,7 @@ class GraphEncodingBuilder(IDPool, list):
         :param forwarding_args: Arguments to be forwarded to SMS
 
         """
-        self.solve(allGraphs=args.all_graphs, hideGraphs=args.hide_graphs, cnfFile=args.cnf_file, args_SMS=args.args_SMS, forwarding_args=forwarding_args, graph_format=args.graph_format)
+        self.solve(allGraphs=args.all_graphs, hideGraphs=args.hide_graphs, cnfFile=args.cnf_file, args_SMS=args.args_SMS, forwarding_args=forwarding_args, graph6_format=args.graph6_format)
 
     # ------------------some utilies--------------------------
 
@@ -313,7 +325,7 @@ class GraphEncodingBuilder(IDPool, list):
         :param outstream: print to here
 
         """
-        print(f"p cnf {len(self)} {self.nextId-1}", file=outstream)
+        print(f"p cnf {self.nextId-1} {len(self)}", file=outstream)
         for c in self:
             print(" ".join(str(x) for x in c), 0, file=outstream)
 
@@ -376,6 +388,9 @@ class GraphEncodingBuilder(IDPool, list):
         if args.chi_low:
             self.paramsSMS["min-chromatic-number"] = args.chi_low
 
+        if args.color_critical:
+            self.colorCritical(args.color_critical)
+
         if args.connectivity_low:
             self.minConnectivity(args.connectivity_low)
 
@@ -386,6 +401,51 @@ class GraphEncodingBuilder(IDPool, list):
             for u in self.V:
                 shouldBe([+self.var_edge(u, v) for v in self.V if v != u], [i for i in self.V if i % 2 == 0], self, self, type=DEFAULT_COUNTER)
 
+        if args.fix_k_clique:
+            k = args.fix_k_clique
+            for u, v in combinations(range(k), 2):
+                self.append([self.var_edge(u, v)])
+            self.paramsSMS["initial-partition"] = f"{k} {self.n - k}"
+
+        if args.circulant:
+            self.circulant()
+        if args.block_circulant:
+            self.block_circulant(args.block_circulant)
+
+        if args.contains_cliques:
+            self.contains_cliques(args.contains_cliques[0], args.contains_cliques[1])
+
+        if args.partial_sym_break:
+            self.partialSymBreak()
+
+        if args.exclude_balanced_bipartite_graph:
+            self.excludeBalancedBipartiteGraph()
+
+        if args.fixed_induced_subgraph:
+            with open(args.fixed_induced_subgraph, "r") as f:
+                for i, line in enumerate(f):
+                    if i == args.fixed_induced_subgraph_line:
+                        l = line.split()
+                        n = int(l[0])
+                        l = l[1:]
+                        edges = []
+                        for i in range(len(l) // 2):
+                            edges.append((int(l[2 * i]), int(l[2 * i + 1])))
+
+                        matrix = [[0 for _ in range(n)] for _ in range(n)]
+                        for u, v in edges:
+                            matrix[u][v] = matrix[v][u] = 1
+                        for u, v in combinations(range(n), 2):
+                            if matrix[u][v] == 0:
+                                self.append([-self.var_edge(u, v)])
+                            else:
+                                self.append([self.var_edge(u, v)])
+                        self.paramsSMS["fixed-subgraph-size"] = n
+                        break
+
+        if args.bcp:  # !!!!!!!! must be applied at the end
+            print("Number of propagated literals:", self.bcp(), file=stderr)
+
     # ------------degree encodings--------------
 
     def minDegree(self, delta, countertype=DEFAULT_COUNTER) -> list[list[int]]:
@@ -395,7 +455,7 @@ class GraphEncodingBuilder(IDPool, list):
         :param countertype: specify a cardinality encoding. Default value = DEFAULT_COUNTER
 
         """
-        return degreeBounds(self.V, delta, None, encoding=countertype)
+        return self.degreeBounds(self.V, delta, None, encoding=countertype)
 
     def maxDegree(self, delta, countertype=DEFAULT_COUNTER) -> list[list[int]]:
         """Maximum degree at most delta
@@ -404,7 +464,7 @@ class GraphEncodingBuilder(IDPool, list):
         :param countertype: specify a cardinality encoding. Default value = DEFAULT_COUNTER
 
         """
-        return degreeBounds(self.V, None, delta, encoding=countertype)
+        return self.degreeBounds(self.V, None, delta, encoding=countertype)
 
     def degreeBounds(self, verts, lower, upper, within=False, encoding=DEFAULT_COUNTER) -> list[list[int]]:
         """Enforce that each of verts has degree between lower and upper (either of which can be None)
@@ -625,18 +685,18 @@ class GraphEncodingBuilder(IDPool, list):
         for l in range(3, k):  # forbid 3 cycles up to k-1 cycles
             self.ckFree(l)
 
-    def minGirthCompact(self, k) -> None:
-        """Compact encoding to ensure that the girth is at least k, i.e., no cycle with length < k
+    def minGirthCompact(self, minGirth) -> None:
+        """
+        Compact encoding to ensure that the girth is at least k, i.e., no cycle with length < k
 
-        :param k: girth lower bound
-
+        :param minGirth: girth lower bound
         """
         g = self
         # check distance of i,j without edge i,j.
         for i, j in combinations(g.V, 2):
             reached = [g.var_edge(i, k) if k not in [i, j] and k > i else None for k in g.V]
 
-            for _ in range(k - 4):  # if girth is 4 than no triangles so not in the loop
+            for _ in range(minGirth - 4):  # if girth is 4 than no triangles so not in the loop
                 reachedNew = [g.id() for _ in g.V]
                 for k in g.V:
                     if k in [i, j] or k < i:
@@ -671,6 +731,28 @@ class GraphEncodingBuilder(IDPool, list):
             for i in range(chi):
                 g.append([-g.var_edge(v, w), -color[v][i], -color[w][i]])  # adjacent vertices are not allowed to have the same color
 
+    def colorCritical(self, chi):
+        nColors = chi - 1
+        for v in self.V:
+            # check if G-v is args.critical - 1 colorable
+            colors = [[self.id() for _ in self.V] for _ in range(nColors)]
+            # at least one color
+            for u in self.V:
+                if u != v:
+                    self.append([colors[r][u] for r in range(nColors)])
+            # adjacent once cannot have the same color
+            for u1, u2 in combinations(self.V, 2):
+                if u1 == v or u2 == v:
+                    continue
+                for r in range(nColors):
+                    self.append([-self.var_edge(u1, u2), -colors[r][u1], -colors[r][u2]])
+
+            # basic symmetry breaking: there must be a smaller vertex for each smaller color not choosen
+            for v in self.V:
+                for c in range(nColors):
+                    for cSmaller in range(c):
+                        self.append([-colors[c][v]] + [colors[cSmaller][u] for u in range(v)])
+
     # --------------------------Encodings for initial static partition--------------------------------
 
     def sort_vertices_by_degree(self) -> None:
@@ -699,11 +781,294 @@ class GraphEncodingBuilder(IDPool, list):
                 same_degree_options.append(s)
             g.CNF_OR_APPEND(same_degree_options, g.var_partition(v1, v2))
 
+    def slimSingleStep(self, nOriginal, nReplaced, G, induced=False) -> None:
+        """Apply single step of SLIM given the graph G as edgelist, where some random vertices are replaced"""
+        import random
+
+        VR = random.sample(range(nOriginal), k=nReplaced)
+
+        nFixed = nOriginal - nReplaced
+        self.paramsSMS["initial-partition"] = nFixed * "1 " + str(self.n - nFixed)
+
+        remappingVertices = dict()
+        cur = 0
+        for v in set(range(nOriginal)) - set(VR):
+            remappingVertices[v] = cur
+            cur += 1
+        r = remappingVertices
+
+        remappedEdges = [(min(r[u], r[v]), max(r[u], r[v])) for u, v in G if u not in VR and v not in VR]
+        # fix this subgraph in the encoding
+        for u, v in remappedEdges:
+            self.append([+self.var_edge(u, v)])
+        if induced:
+            for u, v in combinations(range(nFixed), 2):
+                if (u, v) not in G and (v, u) not in G:
+                    self.append([-self.var_edge(u, v)])
+
+    def lex_smaller(self, seq1, seq2):
+        """Ensure that seq1 is lexicographically smaller or equal than seq2"""
+        assert len(seq1) == len(seq2)
+        all_previous_equal = self.id()
+        self.append([+all_previous_equal])
+        for i in range(len(seq1)):
+            self.append([-all_previous_equal, -seq1[i], +seq2[i]])  # all previous equal implies seq1[i] <= seq2[i]
+            all_previous_equal_new = self.id()
+            self.append([-all_previous_equal, -seq1[i], +all_previous_equal_new])
+            self.append([-all_previous_equal, +seq2[i], +all_previous_equal_new])
+            all_previous_equal = all_previous_equal_new
+
+    def circulant(self, symmetryBreaking=True) -> None:
+        self.paramsSMS["no-SMS"] = True
+        for d in range(1, self.n // 2 + 1):  # math.ceil(self.n // 2) + 1): # math.ceil(self.n // 2) + 1
+            for u in self.V:
+                # must be equivalent
+                u1 = 0
+                u2 = d
+                v1 = u
+                v2 = (u + d) % self.n
+                self.append([-self.var_edge(u1, u2), +self.var_edge(v1, v2)])
+                self.append([+self.var_edge(u1, u2), -self.var_edge(v1, v2)])
+
+        def edge2distance(u, v):
+            return min(abs(u - v), self.n - abs(u - v))  # ensures that symmetric
+
+        if False:
+            # no-4-clique
+            for potentialClique in combinations(range(1, self.n), 3):
+                potentialClique = list(potentialClique) + [0]
+                self.append([-self.var_edge(*e) for e in combinations(potentialClique, 2)])
+
+        if False:
+            deg = (self.n - 1) // 3 - 0
+            self.counterFunction([self.var_edge(0, i) for i in range(1, self.n)], deg, atLeast=deg, counterType=DEFAULT_COUNTER)
+
+        if False:
+            # no-4-independent set
+            for potentialClique in combinations(range(1, self.n), 3):
+                potentialClique = list(potentialClique) + [0]
+                self.append([+self.var_edge(*e) for e in combinations(potentialClique, 2)])
+
+        # introducing any additional edge would result in an 4-clique
+        if False:
+            for u in range(1, self.n // 2 + 1):
+                v = 0  # additional edge given by uv
+
+                cliques = []
+                for W in combinations(self.V, 2):
+                    if u in W or v in W:
+                        continue
+                    clique = list(W) + [u, v]
+                    cliquePairs = [p for p in combinations(clique, 2)]
+                    distances = list(set(map(lambda p: edge2distance(p[0], p[1]), cliquePairs)))
+                    distances.remove(edge2distance(v, u))  # remove the edges which would be introduced
+                    # print(u, distances)
+                    clique_var = self.CNF_AND([self.var_edge(0, d) for d in distances])
+                    cliques.append(clique_var)
+                # either edge is already present or it would introduce a 4-clique
+                self.append([+self.var_edge(v, u)] + cliques)
+
+        if symmetryBreaking:
+            # symmetry breaking (only for primes)
+            seq1 = [self.var_edge(0, i) for i in range(1, self.n // 2 + 1)]
+            for first_vertex in [0]:  # don't need to check all because in same orbit
+                for step_size in range(1, self.n // 2 + 1):
+                    if first_vertex == 0 and step_size == 1:
+                        continue
+
+                    if math.gcd(step_size, self.n) != 1:
+                        continue
+                    reordering = [(first_vertex + step_size * i) % self.n for i in range(self.n)]
+                    for i in range(self.n):
+                        assert i in reordering
+                    # print(reordering)
+
+                    seq2 = [self.var_edge(reordering[0], reordering[i]) for i in range(1, self.n // 2 + 1)]
+                    # seq2 = [ self.var_edge(0 , edge2distance(reordering[0], reordering[i])) for i in range(self.n // 2)]
+                    self.lex_smaller(seq1, seq2)
+
+    def block_circulant(self, nBlocks=None, symmetryBreaking=1) -> None:
+        """if symmetry breaking = 0 then no sym breaking
+        if symmetry brekaing = 1 then blocks
+        if symmetry breaking = m then also permute m blocks
+        # TODO also swap blocks
+        """
+        import sys
+
+        print("Value of symmetry breaking", symmetryBreaking, file=sys.stderr)
+        self.paramsSMS["no-SMS"] = True
+        # Number of circulant graphs if not given then smallest prime factor
+        if nBlocks == None:
+            nBlocks = min([i for i in range(2, self.n) if self.n % i == 0])
+
+        # ensure that the diagonal blocks are circulant
+        blocksize = self.n // nBlocks
+        for i in range(nBlocks):
+            for j in range(i, nBlocks):
+                for d in range(0 if i != j else 1, blocksize):  # also diagonal most be considered if i != j
+                    for u in range(blocksize):
+                        u1 = i * blocksize + 0
+                        u2 = j * blocksize + d
+
+                        v1 = i * blocksize + u
+                        v2 = j * blocksize + (u + d) % blocksize
+
+                        self.append([-self.var_edge(u1, u2), +self.var_edge(v1, v2)])
+                        self.append([+self.var_edge(u1, u2), -self.var_edge(v1, v2)])
+
+        if symmetryBreaking:
+            # simple one only permuting each block and swap blocks; use vertex ordering such that blocks are sorted
+            vertexPairOrdering = []
+            print("Number of blocks:", nBlocks)
+            for i in range(nBlocks):
+                for u, v in combinations(range(i * blocksize, (i + 1) * blocksize), 2):
+                    vertexPairOrdering.append((u, v))
+            for u, v in combinations(self.V, 2):
+                if (u, v) not in vertexPairOrdering:
+                    vertexPairOrdering.append((u, v))
+            symmetryCount = 0
+
+            def checkGivenPermutation(p):
+                seq1 = []
+                seq2 = []
+                for u, v in vertexPairOrdering:
+                    up = p[u]
+                    vp = p[v]
+                    if {u, v} == {up, vp}:  # TODO eventuell consider duplicates
+                        continue
+                    seq1.append(self.var_edge(u, v))
+                    seq2.append(self.var_edge(up, vp))
+                self.lex_smaller(seq1, seq2)
+
+            # swap blocks
+            for i, j in combinations(range(nBlocks), 2):
+                permutation = list(range(self.n))
+                for k in range(blocksize):
+                    permutation[blocksize * i + k] = blocksize * j + k
+                    permutation[blocksize * j + k] = blocksize * i + k
+                checkGivenPermutation(permutation)
+                symmetryCount += 1
+
+            print("Number of symmetries:", symmetryCount)
+
+            # symmetry breaking on individual blocks
+            for i in range(nBlocks):
+                first_vertex = i * blocksize
+                for step_size in range(2, blocksize // 2 + 1):
+                    if math.gcd(step_size, blocksize) != 1:
+                        continue
+                    permutation = list(range(i * blocksize)) + [(step_size * i) % blocksize + first_vertex for i in range(blocksize)] + list(range((i + 1) * blocksize, self.n))
+                    for i in range(self.n):
+                        assert i in permutation
+                    # print(reordering)
+                    checkGivenPermutation(permutation)
+                    symmetryCount += 1
+            print("Number of symmetries:", symmetryCount)
+
+        if symmetryBreaking and False:
+            permutationsBlock = [[] for i in range(nBlocks)]  # for each block store the symmetries
+            for i in range(nBlocks):
+                first_vertex = i * blocksize
+                for step_size in range(1, blocksize):
+                    if math.gcd(step_size, blocksize) != 1:
+                        continue
+                    reordering = list(range(i * blocksize)) + [(step_size * i) % blocksize + first_vertex for i in range(blocksize)] + list(range((i + 1) * blocksize, self.n))
+                    permutationsBlock[i].append(reordering)
+            import sys
+
+            # print(permutationsBlock, file=sys.stderr)
+            counter = 0
+            print("Value of symmetry breaking", symmetryBreaking, file=sys.stderr)
+            for T in combinations(range(nBlocks), symmetryBreaking):
+                print(T, file=sys.stderr)
+                for P in product(*[permutationsBlock[i] for i in T]):
+                    # print(P, file=sys.stderr)
+                    counter += 1
+                    seq1 = []
+                    seq2 = []
+                    for u, v in combinations(range(self.n), 2):
+                        up = u
+                        vp = v
+                        for p in P:
+                            up = p[up]
+                            vp = p[vp]
+                        if {u, v} == {up, vp}:
+                            continue
+                        seq1.append(self.var_edge(u, v))
+                        seq2.append(self.var_edge(up, vp))
+                    self.lex_smaller(seq1, seq2)
+            print("Number of symmetries", counter, file=sys.stderr)
+            # TODO also swap blocks
+
+    def contains_cliques(self, s, k):
+        """Ensures that the graph contains exactly s cliques of size k and each edge is part of such a clique"""
+        cliqueVertices = [[self.id() for _ in self.V] for _ in range(s)]  # cliqueVertices[i][v] is true iff v is in clique i
+        for i in range(s):
+            self.counterFunction(cliqueVertices[i], k, k, k, counterType=DEFAULT_COUNTER)  # exactly k selected
+            for u, v in combinations(self.V, 2):
+                self.append([-cliqueVertices[i][u], -cliqueVertices[i][v], +self.var_edge(u, v)])
+        # each edge is part of a clique
+        for u, v in combinations(self.V, 2):
+            self.append([-self.var_edge(u, v)] + [self.CNF_AND([cliqueVertices[i][u], cliqueVertices[i][v]]) for i in range(s)])
+
+        # cliques can not be identical
+        for i, j in combinations(range(s), 2):
+            self.append([self.CNF_AND([+cliqueVertices[i][v], -cliqueVertices[j][v]]) for v in self.V])  # one in i but not in j
+
+        # each vertex is in at most one clique
+        for v in self.V:
+            self.append([cliqueVertices[i][v] for i in range(s)])
+
+        # symmetry breaking over cliques first clique is lex-smallest
+        for i in range(1, s):
+            self.lex_smaller(cliqueVertices[i - 1], cliqueVertices[i])
+
+    def partialSymBreak(self):
+        for u, v in combinations(self.V, 2):
+            self.lex_smaller([self.var_edge(u, k) for k in range(self.n) if k not in [u, v]], [self.var_edge(v, k) for k in range(self.n) if k not in [u, v]])
+
+    def bcp(self):
+        """Perform unit propagation on the current encoding whilest ignoring the edge variables"""
+        maxEdgeVar = self.n * (self.n - 1) // 2 if not self.directed else self.n**2 - self.n
+        propagatedLiterals = [c[0] for c in self if len(c) == 1 if abs(c[0]) > maxEdgeVar]
+        nPropagted = 0
+        while len(propagatedLiterals) > 0:
+            nPropagted += len(propagatedLiterals)
+            # print("Propagated literals (inbetween):", len(propagatedLiterals))
+            propagatedValues = [None for _ in range(self.nextId)]
+            for l in propagatedLiterals:
+                propagatedValues[abs(l)] = 1 if l > 0 else -1
+
+            def sign(i):
+                return 1 if i > 0 else -1
+
+            def isSatisfied(c):
+                return any([propagatedValues[abs(l)] and sign(l) == propagatedValues[abs(l)] for l in c])
+
+            # already assumes that not satisfied
+            def simplifyClause(c):
+                return np.array([l for l in c if not propagatedValues[abs(l)]])
+
+            # delete literals from clauses and delete satisfied clauses
+            newClauses = [simplifyClause(c) for c in self if not isSatisfied(c)]
+            self.clear()
+            self.extend(newClauses)
+            propagatedLiterals = [c[0] for c in self if len(c) == 1 if abs(c[0]) > maxEdgeVar]
+
+        return nPropagted
+
+    def excludeBalancedBipartiteGraph(self):
+        nHalf = [self.n // 2] if self.n % 2 == 0 else [self.n // 2, self.n // 2 + 1]
+        for h in nHalf:
+            self.append([self.var_edge(u, v) for u, v in combinations(range(h), 2)] + [self.var_edge(u, v) for u, v in combinations(range(h, self.n), 2)])
+
 
 # ---------------------Main function------------------------------------------
 
 if __name__ == "__main__":
     args, forwarding_args = getDefaultParser().parse_known_args()
+    if forwarding_args:
+        print("WARNING: Unknown arguments for python script which are forwarded to SMS:", forwarding_args, file=stderr)
     b = GraphEncodingBuilder(args.vertices, directed=args.directed, multiGraph=args.multigraph, staticInitialPartition=args.static_partition, underlyingGraph=args.underlying_graph, DEBUG=args.DEBUG)
     b.add_constraints_by_arguments(args)
     if args.no_solve:

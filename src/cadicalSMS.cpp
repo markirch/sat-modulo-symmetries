@@ -1,6 +1,7 @@
 #include "useful.h"
 #include "cadicalSMS.hpp"
 #include "cadical.hpp"
+#include <algorithm>
 
 void CadicalSolver::init(SolverConfig config, cnf_t &cnf)
 {
@@ -41,13 +42,12 @@ void CadicalSolver::init(SolverConfig config, cnf_t &cnf)
     }
 
     int highestObservedVariables = *max_element(config.observedVars.begin(), config.observedVars.end());
-    currentAssigment = vector<truth_value_t>(highestObservedVariables + 1, truth_value_unknown); // must be created before adding clauses because already notification can happen
+    currentAssignment = vector<truth_value_t>(highestObservedVariables + 1, truth_value_unknown); // must be created before adding clauses because already notification can happen
     isFixed = vector<bool>(highestObservedVariables + 1, false);
 
     literal2clausePos = vector<vector<int>>(highestObservedVariables + 1);
     literal2clauseNeg = vector<vector<int>>(highestObservedVariables + 1);
 
-    highestVariable = std::max(highestVariable, highestObservedVariables);
     // add clauses to solver
     for (auto clause : cnf)
     {
@@ -58,7 +58,6 @@ void CadicalSolver::init(SolverConfig config, cnf_t &cnf)
         {
             if (lit == 0)
                 EXIT_UNWANTED_STATE
-            highestVariable = std::max(highestVariable, abs(lit));
             solver->add(lit);
         }
         solver->add(0);
@@ -86,6 +85,58 @@ CadicalSolver::CadicalSolver(SolverConfig config) : GraphSolver(config)
     init(config, cnf);
 }
 
+int* CadicalSolver::getNextGraph(vector<int> assumptions)
+{
+    // mandatory configuration for this API to make sense
+    config.checkSolutionInProp = false;
+    config.allModels = false;
+    config.hideGraphs = true;
+
+    while (true) {
+
+      for (auto lit : assumptions)
+          solver->assume(lit);
+      if (config.addedClauses) {
+          if (assumptions.size() != 0)
+              printf("Warning: adding assumptions to clause file; only supported for a single assumption");
+          for (auto l : assumptions)
+              fprintf(config.addedClauses, "%d 0\n", l); // unit clauses
+      }
+
+      int res = solver->solve();
+      if (res == 20) // no more solutions
+          return nullptr;
+      if (res != 10) { EXIT_UNWANTED_STATE } // TODO just to be sure for know
+
+      adjacency_matrix_t matrix = getAdjacencyMatrix();
+      vector<lit_t> clause; // to block the current solution
+
+      if (check_solution()) { // true if no clause was added
+          last_graph.clear();
+          int m = 0;
+          last_graph.push_back(m);
+          for (int i = 0; i < vertices; i++) {
+            for (int j = i+1; j < vertices; j++) {
+              if (matrix[i][j] == truth_value_true) {
+                m++;
+                last_graph.push_back(i);
+                last_graph.push_back(j);
+                clause.push_back(-edges[i][j]);
+              } else if (matrix[i][j] == truth_value_false) {
+                clause.push_back(edges[i][j]);
+              } else {
+                EXIT_UNWANTED_STATE
+              }
+            }
+          }
+          last_graph[0] = m;
+          addClause(clause, false);
+          return &(last_graph[0]);
+      }
+
+    }
+}
+
 bool CadicalSolver::solve(vector<int> assumptions)
 {
     do
@@ -111,12 +162,13 @@ bool CadicalSolver::solve(vector<int> assumptions)
         if (check_solution()) // true if no clause was added
             return true;
     } while (true);
+    return true;
 }
 
 void CadicalSolver::printFullModel()
 {
     printf("Model: ");
-    for (int i = 1; i < highestVariable; i++)
+    for (int i = 1; i < nextFreeVariable; i++)
     {
         printf("%d ", solver->val(i));
     }
@@ -127,6 +179,22 @@ bool CadicalSolver::solve(vector<int>, int)
 {
     printf("Not implemented yet\n");
     EXIT_UNWANTED_STATE
+}
+
+// PySMS API
+extern "C" {
+  int* next_solution(void* sms_solver) {
+    return ((CadicalSolver*) sms_solver)->getNextGraph(vector<int>{});
+  }
+  void* create_solver(int vertices) {
+    return new(std::nothrow) CadicalSolver(SolverConfig(vertices));
+  }
+  void destroy_solver(void* sms_solver) {
+    delete (CadicalSolver*) sms_solver;
+  }
+  void add_literal(void* sms_solver, int lit) {
+    ((CadicalSolver*)sms_solver)->solver->add(lit);
+  }
 }
 
 // // TODO select parts which should be used

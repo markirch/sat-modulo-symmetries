@@ -17,7 +17,7 @@ protected:
     long long calls = 0;           // number of times the property was checked
     clock_t time = 0;              // total time for checking the property
     long numberOfAddedClauses = 0; // total number of added clauses
-    uint64_t limit_reached = 0;    // count calls which did not provide a conclusive answer
+    long long limit_reached = 0;    // count calls which did not provide a conclusive answer
 
 public:
     void printStats()

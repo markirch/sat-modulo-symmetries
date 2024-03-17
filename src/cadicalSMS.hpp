@@ -4,7 +4,6 @@
 #include "sms.hpp"
 #include "cadical.hpp"
 #include <deque>
-#include <algorithm>
 
 using std::deque;
 
@@ -18,12 +17,10 @@ private:
     int highestEdgeVariable;
 
     vector<vector<int>> clauses;
-    int highestVariable = 0;
     int incrementalMode = false; // if true solver has finished and clauses are added by the normal "incremental interface", i.e., adding clauses without observed variables is possible
 
-    deque<vector<int>> current_trail;       // for each decision lvl store the assigned literals (only positive version)
-    vector<truth_value_t> currentAssigment; // currentAssigment[v] gives the truthvalue of variable v (if observed)
-    vector<bool> isFixed;                   // isFixed[v] is true if the truth value of this variable is fixed
+    deque<vector<int>> current_trail; // for each decision lvl store the assigned literals (only positive version)
+    vector<bool> isFixed;             // isFixed[v] is true if the truth value of this variable is fixed
 
     vector<vector<int>> literal2clausePos; // for each edge variable store clause which was used the last time.
     vector<vector<int>> literal2clauseNeg; // for each negation of an edge variable
@@ -32,93 +29,31 @@ private:
 
 public:
     CaDiCaL::Solver *solver;
-    CaDiCaL::Solver *universalSolver;
     CadicalSolver(SolverConfig config);
     CadicalSolver(SolverConfig config, cnf_t &cnf);
-    ~CadicalSolver() { solver->disconnect_external_propagator(); delete solver; }
+    ~CadicalSolver()
+    {
+        solver->disconnect_external_propagator();
+        delete solver;
+    }
 
     bool solve(vector<int> assumptions);
     bool solve(vector<int> assumptions, int timeout);
     void printFullModel(void);
 
-protected: // virtual classes from common interface
-    adjacency_matrix_t getAdjacencyMatrix()
-    {
-        // printf("Trail: ");
-        // for (auto lit: *current_trail)
-        //     printf("%d ", lit);
-        // printf("\n");
-        if (!incrementalMode)
-        {
-            adjacency_matrix_t matrix(vertices, vector<truth_value_t>(vertices, truth_value_unknown));
-#ifndef DIRECTED
-            for (int i = 0; i < vertices; i++)
-                for (int j = i + 1; j < vertices; j++)
-                    matrix[i][j] = matrix[j][i] = currentAssigment[edges[i][j]];
-#else
-            for (int i = 0; i < vertices; i++)
-                for (int j = 0; j < vertices; j++)
-                    if (i != j)
-                        matrix[i][j] = currentAssigment[edges[i][j]];
-
-#endif
-            // printFullMatrix = true;
-            // printAdjacencyMatrix(matrix);
-            return matrix;
-        }
-        else
-        {
-            adjacency_matrix_t matrix(vertices, vector<truth_value_t>(vertices, truth_value_unknown));
-#ifndef DIRECTED
-            for (int i = 0; i < vertices; i++)
-                for (int j = i + 1; j < vertices; j++)
-                    matrix[i][j] = matrix[j][i] = solver->val(edges[i][j]) > 0 ? truth_value_true : truth_value_false;
-#else
-            for (int i = 0; i < vertices; i++)
-                for (int j = 0; j < vertices; j++)
-                    if (i != j)
-                        matrix[i][j] = solver->val(edges[i][j]) > 0 ? truth_value_true : truth_value_false;
-
-#endif
-            // printFullMatrix = true;
-            // printAdjacencyMatrix(matrix);
-            return matrix;
-        }
-    }
-
-    vector<adjacency_matrix_t> getAdjacencyMatrixMultiple()
-    {
-        // printf("Trail: ");
-        // for (auto lit: *current_trail)
-        //     printf("%d ", lit);
-        // printf("\n");
-        int nMatrices = config.edgesMultiple.size();
-        vector<adjacency_matrix_t> matrices(nMatrices, adjacency_matrix_t(vertices, vector<truth_value_t>(vertices, truth_value_unknown)));
-#ifndef DIRECTED
-        for (int n = 0; n < nMatrices; n++)
-            for (int i = 0; i < vertices; i++)
-                for (int j = i + 1; j < vertices; j++)
-                    matrices[n][i][j] = matrices[n][j][i] = currentAssigment[config.edgesMultiple[n][i][j]];
-#else
-        EXIT_UNWANTED_STATE // not supported yet
-#endif
-        // printFullMatrix = true;
-        // printAdjacencyMatrix(matrix);
-        return matrices;
-    }
-
-    vector<truth_value_t> &getCurrentAssignemnt() { return currentAssigment; }
-
-    vector<vector<truth_value_t>> getStaticPartition()
-    {
-        vector<vector<truth_value_t>> partition(vertices, vector<truth_value_t>(vertices, truth_value_unknown));
-        for (int i = 0; i < vertices; i++)
-            for (int j = i + 1; j < vertices; j++)
-            {
-                partition[i][j] = partition[j][i] = currentAssigment[config.staticPartition[i][j]];
-            }
-        return partition;
-    }
+    /* API function to return and internally block the next solution
+     * the returned data has the following format:
+     *    
+     *    // g = getNextGraph()
+     *    *g is an int that holds the number of edges, m
+     *    g[1]-g[2] ... g[2m-1]-g[2m] are the edges of the graph
+     *
+     * the data is stored in last_graph, and the returned pointer
+     * points to its beginning
+     *   
+     */
+    int* getNextGraph(vector<int> assumptions);
+    vector<int> last_graph;
 
 public:
     void addClause(const vector<lit_t> &clause, bool)
@@ -152,7 +87,7 @@ public:
     {
         changeInTrail = true;
         int absLit = abs(lit);
-        currentAssigment[absLit] = lit > 0 ? truth_value_true : truth_value_false;
+        currentAssignment[absLit] = lit > 0 ? truth_value_true : truth_value_false;
         this->isFixed[absLit] = is_fixed;
         if (!is_fixed)
             current_trail.back().push_back(absLit);
@@ -171,7 +106,7 @@ public:
             for (int l : last)
             {
                 if (!isFixed[l])
-                    currentAssigment[l] = truth_value_unknown;
+                    currentAssignment[l] = truth_value_unknown;
             }
             current_trail.pop_back();
         }
@@ -193,12 +128,23 @@ public:
 
     bool check_solution()
     {
+        // printf("Check whether there are fixed variables\n");
+        // int nFixed = 0;
+        // for (int i = 1; i < nextFreeVariable; i++)
+        // {
+        //     if (solver->fixed(i) !=  0)
+        //     {
+        //         // printf("Variable %d is fixed\n", i);
+        //         nFixed++;
+        //     }
+        // }
+        // printf("Number of fixed variables: %d\n", nFixed);
         if (!config.checkSolutionInProp)
         {
             incrementalMode = true;
             vector<int> currentModel;
             this->model = &currentModel; // TODO have to extract current model because the one from cb_check is deleted
-            for (int i = 1; i <= highestVariable; i++)
+            for (int i = 1; i < nextFreeVariable; i++)
             {
                 currentModel.push_back(solver->val(i));
             }
@@ -274,14 +220,14 @@ public:
         for (auto l : lastClause)
         {
             auto absLit = abs(l);
-            if (currentAssigment[absLit] == truth_value_unknown)
+            if (currentAssignment[absLit] == truth_value_unknown)
             {
                 nUnknown++;
                 unassigned = l;
             }
-            else if (currentAssigment[absLit] == truth_value_true && l > 0)
+            else if (currentAssignment[absLit] == truth_value_true && l > 0)
                 return 0; // already satisfied
-            else if (currentAssigment[absLit] == truth_value_false && l < 0)
+            else if (currentAssignment[absLit] == truth_value_false && l < 0)
                 return 0; // already satisfied
         }
 
@@ -332,5 +278,12 @@ public:
         }
     };
 };
+
+extern "C" {
+  int* next_solution(void* sms_solver);
+  void* create_solver(int vertices);
+  void destroy_solver(void* sms_solver);
+  void add_literal(void* sms_solver, int lit);
+}
 
 #endif

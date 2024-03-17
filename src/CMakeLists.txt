@@ -6,10 +6,14 @@ find_package(Boost 1.74.0 REQUIRED COMPONENTS program_options)
 include_directories(${Boost_INCLUDE_DIRS})
 link_libraries(${Boost_LIBRARIES})
 
-set(sources "minimalityCheckCommon.cpp" "sms.cpp" "cadicalSMS.cpp" "useful.cpp" "connectedComponents.cpp" "coloring.cpp" "connectedChecker.cpp" "planarity.cpp" "coloringCheck.cpp" "forbiddenSubgraph.cpp" "universal.cpp")
+set(sources "minimalityCheckCommon.cpp" "sms.cpp" "cadicalSMS.cpp" "useful.cpp" "connectedComponents.cpp" "coloring.cpp" "connectedChecker.cpp" "planarity.cpp" "coloringCheck.cpp"  "universal.cpp" "universal2.cpp" "qcirParser.cpp")
+if(GLASGOW)
+	list(APPEND sources "forbiddenSubgraph.cpp")
+endif()
+
 set(clingo_wrapper "clingoSMS.cpp")
 set(glasgow_wrapper "glasgow_wrapper.cpp")
-
+# set(cadical_static_lib "${CMAKE_CURRENT_SOURCE_DIR}/../cadical-rel-1.7.4/build/libcadical.a")
 set(cadical_static_lib "${CMAKE_CURRENT_SOURCE_DIR}/../cadical/build/libcadical.a")
 link_libraries("${cadical_static_lib}")
 
@@ -18,17 +22,17 @@ set(CMAKE_CXX_FLAGS ${CMAKE_CXX_FLAGS} "-Wall -Wextra -pedantic")
 
 find_package(Clingo)
 if(Clingo_FOUND) # only build with clingo if the library is available
-	if(USE_CLINGO)
-		list(APPEND sources "${clingo_wrapper}")
-		add_compile_definitions(INCLUDE_CLINGO)
-		link_libraries(libclingo)
-	endif()
+	list(APPEND sources "${clingo_wrapper}")
+	add_compile_definitions(INCLUDE_CLINGO)
+	link_libraries(libclingo)
 endif()
 
 #set_property(GLOBAL PROPERTY RULE_LAUNCH_COMPILE "time")
 
-add_library(sms "minimalityCheck.cpp" ${sources})
-add_library(smsdir "minimalityCheck_dir.cpp" ${sources})
+add_library(sms SHARED "minimalityCheck.cpp" ${sources})
+add_library(smsdir SHARED "minimalityCheck_dir.cpp" ${sources})
+add_library(sms_static STATIC "minimalityCheck.cpp" ${sources})
+add_library(smsdir_static STATIC "minimalityCheck_dir.cpp" ${sources})
 
 # targets must be added *after* all calls to link_libraries()
 add_executable(smsg "main.cpp")
@@ -36,17 +40,16 @@ add_executable(smsd "main.cpp")
 
 target_compile_definitions(smsd PRIVATE DIRECTED)
 target_compile_definitions(smsdir PRIVATE DIRECTED)
+target_compile_definitions(smsdir_static PRIVATE DIRECTED)
 
-target_link_libraries(smsg PRIVATE sms)
-target_link_libraries(smsd PRIVATE smsdir)
+target_link_libraries(smsg PRIVATE sms_static)
+target_link_libraries(smsd PRIVATE smsdir_static)
 
-install(TARGETS smsg smsd sms smsdir)
+install(TARGETS smsg smsd sms smsdir sms_static smsdir_static)
 install(FILES "${cadical_static_lib}" DESTINATION lib)
 install(FILES "sms.hpp" "cadical.hpp" "cadicalSMS.hpp" "useful.h" "graphChecker.hpp" "minimalityCheck.hpp" DESTINATION include/sms)
 if (Clinfo_FOUND)
-	if (USE_CLINGO)
-		install(FILES "clingoSMS.hpp" DESTINATION include/sms)
-	endif()
+	install(FILES "clingoSMS.hpp" DESTINATION include/sms)
 endif()
 
 

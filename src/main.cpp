@@ -19,6 +19,7 @@ namespace po = boost::program_options;
 #include "forbiddenSubgraph.hpp"
 #include "connectedChecker.hpp"
 #include "universal.hpp"
+#include "universal2.hpp"
 
 int fixedSubgraphSize; // for the sake of simplicity i made global variables
 int nextFreeVariableUniversal;
@@ -26,13 +27,16 @@ int nextFreeVariableUniversal;
 int thickness2Frequency; // frequency for checking whether the graph has indeed thickness 2
 int thickness2FrequencyMultigraph;
 int planarityFrequency;
+int frequencyForbiddenSubgraphs;
 int coloringAlgo; // 0 = simple, 1 = DPLL, 2 = SAT
+int independenceNumberUpperBound;
+int cliqueNumberUpperBound;
 
 bool triangleVersion;
 int triangleVars = 0; // starting point of triangle variables if used
 
 int minIntersectionVar = 0; // starting point of intersection variables
-bool useCadical = true;
+bool useClingo = false;
 int greedyColoring = 0;
 
 bool generate_connected = false;
@@ -42,6 +46,7 @@ bool hypercoloring;
 int minChromaticNumber;
 
 bool addPermutedColorings;
+bool polarityHashing = false;
 
 vector<int> forAllAsumptions; // variables which should be added als assumtpion to the solver
 vector<vector<int>> forAllCNF;
@@ -50,6 +55,9 @@ clock_t startOfSolving;
 
 vector<vector<pair<int, int>>> forbiddenSubgraphs; // a list of edge-lists, which give forbidden subgraphs
 bool eliminateAllsubgraphs;
+
+vector<int> positiveAssumptions;
+vector<int> negativeAssumptions;
 
 int main(int argc, char const **argv)
 {
@@ -60,6 +68,7 @@ int main(int argc, char const **argv)
     std::ifstream forAllFileQCIRAssumptions;
     std::ifstream forbiddenSubgraphFile;
     std::ifstream forbiddenInducedSubgraphFile;
+    std::ifstream qcirFile;
 
     pair<int, int> minChomaticNumberSubgraph; // first give minimum chromatic number, second the size
     int minChromaticIndexHypergraph = 0;      // Minimum edge chromatic number of the hypergraph
@@ -102,7 +111,7 @@ int main(int argc, char const **argv)
 
     main_opts.add_options()
 #ifdef INCLUDE_CLINGO
-      ("useClingo", po::bool_switch(&useCadical)->default_value(true), "Use Clingo instead of Cadical")
+      ("use-clingo", po::bool_switch(&useClingo)->default_value(false), "Use Clingo instead of Cadical")
 #endif
       ("cnf", po::value<std::string>(), "file with the CNF encoding of the wished for graphs, in a stripped-down format")
       ("dimacs", po::value<std::string>()->notifier([&dimacsFile](const std::string &value)
@@ -142,9 +151,21 @@ int main(int argc, char const **argv)
           std::exit(EXIT_FAILURE);
       } }),
               "File containing the existential variables which should be forwarded as assumptions to the universal part.")
-
+      ("polarity-hashing", po::bool_switch(&polarityHashing), "Use polarity hashing for the the circuit based 2QBF solver")
+      ("qcir-file", po::value<std::string>()->notifier([&qcirFile](const std::string &value)
+                                                           {
+        qcirFile.open(value);
+        if (qcirFile.fail()) {
+            std::cerr << "Failed to open forall file." << value << std::endl;
+            std::exit(EXIT_FAILURE);
+        } }),
+              "A file containing encoding in QCIR format")
+      
+      ("pos-assumptions", po::value<std::vector<int>>(&positiveAssumptions)->multitoken(), "Solve under the following assumptions")
+      ("neg-assumptions", po::value<std::vector<int>>(&negativeAssumptions)->multitoken(), "Solve under the following negated assumptions") // TODO workarround because cannot give negative numbers as argument
 
 #ifdef GLASGOW
+      ("frequency-forbidden-subgraphs", po::value<int>(&frequencyForbiddenSubgraphs), "The frequency with which to call the forbidden subgraph check or the induced forbidden subgraph check")
       ("forbidden-subgraphs", po::value<std::string>()->notifier([&forbiddenSubgraphFile](const std::string &value)
                                                                        {
           forbiddenSubgraphFile = std::ifstream(value);
@@ -161,6 +182,9 @@ int main(int argc, char const **argv)
               std::exit(EXIT_FAILURE);
           } }),
               "same as above, only induced")
+      ("independence-number-upp", po::value<int>(&independenceNumberUpperBound), "Upper bound on the independence number")
+      ("clique-number-upp", po::value<int>(&cliqueNumberUpperBound), "Upper bound on the clique number")
+      
 #endif
       ("no-SMS", po::bool_switch(&config.turnoffSMS), "Turn off SMS, i.e., no minimality check")
       ("initial-partition", po::value<std::vector<int>>(&initialPartitionArguments)->multitoken(),
@@ -246,8 +270,9 @@ int main(int argc, char const **argv)
     catch (const po::unknown_option &e)
     {
         std::cout << "Error: Unknown option '" << e.get_option_name() << "'" << std::endl;
+        std::cout << "Note that when using pysms the unknown arguments are forwarded to smsg/smsd." << std::endl;
         std::cout << all_opts << std::endl;
-        return EXIT_FAILURE;
+        return EXIT_FAILURE; 
     }
 
     if (vm.count("help"))
@@ -275,13 +300,17 @@ int main(int argc, char const **argv)
     }
 
     int vertices = config.vertices;
+    for (auto x : positiveAssumptions)
+        config.assumptions.push_back(x);
+    for (auto x : negativeAssumptions)
+        config.assumptions.push_back(-x);
 
     // parse more complicated options
     if (vm.count("vertex-orderings-file"))
     {
         config.initialPartition = vector<bool>(vertices, false);
         config.initialPartition[0] = true;
-        std::string filename = vm["vertexOrderingsFile"].as<std::string>();
+        std::string filename = vm["vertex-orderings-file"].as<std::string>();
         std::ifstream file(filename);
         if (!file)
         {
@@ -348,7 +377,7 @@ int main(int argc, char const **argv)
     printf("Number of vertices: %d\n", vertices);
 
     assert(!config.initialPartition.empty());
-    assert(config.initialPartition.size() == vertices);
+    assert((int) config.initialPartition.size() == vertices);
 
     if (fixedSubgraphSize != 0)
     {
@@ -374,26 +403,7 @@ int main(int argc, char const **argv)
     if (minIntersectionVar)
     {
         config.init_intersection_vars(minIntersectionVar); // TODO only call when needed?
-        if (!useCadical)
-            for (int i = 0; i < config.b_vertices[1]; i++)
-                for (int j = i + 1; j < config.b_vertices[1]; j++)
-                    cnf.push_back({config.edges_intersection_graph[i][j], -config.edges_intersection_graph[i][j]}); // trivial clauses but need the variables. TODO find better solution
     }
-
-    if (!useCadical)
-        for (int i = 0; i < vertices; i++)
-            for (int j = i + 1; j < vertices; j++)
-                cnf.push_back({config.edges[i][j], -config.edges[i][j]}); // trivial clauses but need the variables. TODO find better solution
-
-#else
-    if (!useCadical)
-        for (int i = 0; i < vertices; i++)
-            for (int j = 0; j < vertices; j++)
-            {
-                if (i == j)
-                    continue;
-                cnf.push_back({config.edges[i][j], -config.edges[i][j]}); // trivial clauses but need the variables. TODO find better solution
-            }
 #endif
 
     // TODO combineStaticPlusDynamic, triangleVersion or intersection graph are not compatable. Currently only one of them can be selected.
@@ -408,7 +418,7 @@ int main(int argc, char const **argv)
                 config.observedVars.push_back(config.staticPartition[i][j]);
             }
 
-        if (!useCadical)
+        if (useClingo)
         {
             EXIT_UNWANTED_STATE; // currently only supported for CADICAL
         }
@@ -423,11 +433,6 @@ int main(int argc, char const **argv)
     if (triangleVersion)
     {
         config.init_triangle_vars(triangleVars);
-        if (!useCadical)
-            for (int i = 0; i < vertices; i++)
-                for (int j = i + 1; j < vertices; j++)
-                    for (int k = j + 1; k < vertices; k++)
-                        cnf.push_back({config.triangles[i][j][k], -config.triangles[i][j][k]}); // trivial clauses but need the variables. TODO find better solution
     }
 
     // read cnf-file
@@ -480,7 +485,7 @@ int main(int argc, char const **argv)
 
     GraphSolver *solver;
 
-    if (useCadical)
+    if (!useClingo)
     {
         printf("SAT Solver: Cadical\n");
         solver = new CadicalSolver(config, cnf); // TODO check if highest variable also highest according to triangle variables and other stuff
@@ -549,11 +554,16 @@ int main(int argc, char const **argv)
     }
 
 #ifdef GLASGOW
+    if (frequencyForbiddenSubgraphs == 0)
+        frequencyForbiddenSubgraphs = vertices > 2 ? vertices : 3;
     if (forbiddenSubgraphFile.is_open() || forbiddenInducedSubgraphFile.is_open())
-    {
-        int frequencyForbiddenSubgraphs = vertices > 2 ? vertices : 3;
         solver->addPartiallyDefinedGraphChecker(new ForbiddenSubgraphCheckerGlasgow(frequencyForbiddenSubgraphs, forbiddenSubgraphFile, forbiddenInducedSubgraphFile));
-    }
+
+    if (independenceNumberUpperBound)
+        solver->addPartiallyDefinedGraphChecker(new MaxIndependentSetChecker(frequencyForbiddenSubgraphs, independenceNumberUpperBound));
+
+    if (cliqueNumberUpperBound)
+        solver->addPartiallyDefinedGraphChecker(new MaxCliqueChecker(frequencyForbiddenSubgraphs, cliqueNumberUpperBound));
 #endif
 
     if (forAllFile.is_open())
@@ -602,6 +612,13 @@ int main(int argc, char const **argv)
                 }
         }
         solver->addComplexFullyDefinedGraphChecker(new UniversalCheckerQCIR(forAllFileQCIR, forAllAsumptions));
+    }
+
+    if (qcirFile.is_open())
+    {
+        QCIRchecker *checker = new QCIRchecker(qcirFile, polarityHashing);
+        solver->addComplexFullyDefinedGraphChecker(checker);
+        solver->nextFreeVariable = std::max(solver->nextFreeVariable, checker->highestVariableInInstance + 1);
     }
 
     if (greedyColoring)

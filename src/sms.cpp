@@ -5,20 +5,25 @@
 #include "sms.hpp"
 
 // change the number of vertices in an existing SolverConfig object this way to update all dependencies
-void SolverConfig::set_vertices(int vertices) {
+void SolverConfig::set_vertices(int vertices)
+{
   this->vertices = vertices;
   initialPartition = vector<bool>(vertices, false);
   init_edge_vars();
-  // this is a bit hacky, but it works
-  // for 2 vertices there is no need for SMS because different graphs are non-isomorphic
-  // so vertices == 2 serves as a signifier that we want to construct a non-SMS solver
-  if (vertices == 2) {
+// this is a bit hacky, but it works
+// for 2 vertices there is no need for SMS because different graphs are non-isomorphic
+// so vertices == 2 serves as a signifier that we want to construct a non-SMS solver
+#ifndef DIRECTED
+  if (vertices == 2)
+  {
     turnoffSMS = true;
   }
+#endif
 }
 
 #ifndef DIRECTED
-void SolverConfig::init_edge_vars() {
+void SolverConfig::init_edge_vars()
+{
   observedVars.clear();
   nextFreeVariable = 1;
   edges = vector<vector<lit_t>>(vertices, vector<lit_t>(vertices, 0));
@@ -30,7 +35,30 @@ void SolverConfig::init_edge_vars() {
     }
 }
 
-void SolverConfig::init_multi_edge_vars() { // to be called only after init_edge_vars()
+#else
+
+void SolverConfig::init_edge_vars()
+{
+  observedVars.clear();
+  nextFreeVariable = 1;
+  edges = vector<vector<lit_t>>(vertices, vector<lit_t>(vertices, 0));
+  for (int i = 0; i < vertices; i++)
+  {
+    for (int j = 0; j < vertices; j++)
+    {
+      if (i == j)
+        continue;
+      edges[i][j] = nextFreeVariable++;
+      observedVars.push_back(edges[i][j]);
+    }
+  }
+}
+
+#endif
+
+#ifndef DIRECTED
+void SolverConfig::init_multi_edge_vars()
+{                                 // to be called only after init_edge_vars()
   edgesMultiple.push_back(edges); // first level coincides with edge-variables
   // the edges for the first layer have already been created, init the remaining layers
   for (int x = 1; x < numberOfOverlayingGraphs; x++)
@@ -47,20 +75,9 @@ void SolverConfig::init_multi_edge_vars() { // to be called only after init_edge
   }
 }
 #else
-void SolverConfig::init_edge_vars() {
-  observedVars.clear();
-  edges = vector<vector<lit_t>>(vertices, vector<lit_t>(vertices, 0));
-  for (int i = 0; i < vertices; i++)
-    for (int j = 0; j < vertices; j++)
-    {
-      if (i == j)
-        continue;
-      edges[i][j] = nextFreeVariable++;
-      observedVars.push_back(edges[i][j]);
-    }
-}
 
-void SolverConfig::init_multi_edge_vars() { // to be called only after init_edge_vars()
+void SolverConfig::init_multi_edge_vars()
+{ // to be called only after init_edge_vars()
   // the edges for the first layer have already been created, init the remaining layers
   for (int x = 1; x < numberOfOverlayingGraphs; x++)
   {
@@ -89,7 +106,8 @@ void SolverConfig::init_intersection_vars(int &minIntersectionVar)
   nextFreeVariable = std::max(nextFreeVariable, minIntersectionVar);
 }
 
-void SolverConfig::init_triangle_vars(int triangleVars) {
+void SolverConfig::init_triangle_vars(int triangleVars)
+{
   triangles = vector<vector<vector<lit_t>>>(vertices, vector<vector<lit_t>>(vertices, vector<lit_t>(vertices, 0)));
   int var = nextFreeVariable;
   if (triangleVars)
@@ -105,17 +123,73 @@ void SolverConfig::init_triangle_vars(int triangleVars) {
 }
 
 // transform a forbidden subgraph into a clause which blocks it
-inline clause_t GraphSolver::theClauseThatBlocks(const forbidden_graph_t& fg) {
-    clause_t clause;
-    for (auto signedEdge : fg)
+inline clause_t GraphSolver::theClauseThatBlocks(const forbidden_graph_t &fg)
+{
+  clause_t clause;
+  for (auto signedEdge : fg)
+  {
+    auto edge = signedEdge.second;
+    if (signedEdge.first == truth_value_true)
+      clause.push_back(-edges[edge.first][edge.second]);
+    else // assum that not truth_value_unknown
+      clause.push_back(edges[edge.first][edge.second]);
+  }
+  return clause;
+}
+
+adjacency_matrix_t GraphSolver::getAdjacencyMatrix()
+{
+  // printf("Trail: ");
+  // for (auto lit: *current_trail)
+  //     printf("%d ", lit);
+  // printf("\n");
+  adjacency_matrix_t matrix(vertices, vector<truth_value_t>(vertices, truth_value_unknown));
+#ifndef DIRECTED
+  for (int i = 0; i < vertices; i++)
+    for (int j = i + 1; j < vertices; j++)
+      matrix[i][j] = matrix[j][i] = currentAssignment[edges[i][j]];
+#else
+  for (int i = 0; i < vertices; i++)
+    for (int j = 0; j < vertices; j++)
+      if (i != j)
+        matrix[i][j] = currentAssignment[edges[i][j]];
+
+#endif
+  // printFullMatrix = true;
+  // printAdjacencyMatrix(matrix);
+  return matrix;
+}
+
+vector<adjacency_matrix_t> GraphSolver::getAdjacencyMatrixMultiple()
+{
+  // printf("Trail: ");
+  // for (auto lit: *current_trail)
+  //     printf("%d ", lit);
+  // printf("\n");
+  int nMatrices = config.edgesMultiple.size();
+  vector<adjacency_matrix_t> matrices(nMatrices, adjacency_matrix_t(vertices, vector<truth_value_t>(vertices, truth_value_unknown)));
+#ifndef DIRECTED
+  for (int n = 0; n < nMatrices; n++)
+    for (int i = 0; i < vertices; i++)
+      for (int j = i + 1; j < vertices; j++)
+        matrices[n][i][j] = matrices[n][j][i] = currentAssignment[config.edgesMultiple[n][i][j]];
+#else
+  EXIT_UNWANTED_STATE // not supported yet
+#endif
+  // printFullMatrix = true;
+  // printAdjacencyMatrix(matrix);
+  return matrices;
+}
+
+vector<vector<truth_value_t>> GraphSolver::getStaticPartition()
+{
+  vector<vector<truth_value_t>> partition(vertices, vector<truth_value_t>(vertices, truth_value_unknown));
+  for (int i = 0; i < vertices; i++)
+    for (int j = i + 1; j < vertices; j++)
     {
-      auto edge = signedEdge.second;
-      if (signedEdge.first == truth_value_true)
-        clause.push_back(-edges[edge.first][edge.second]);
-      else // assum that not truth_value_unknown
-        clause.push_back(edges[edge.first][edge.second]);
+      partition[i][j] = partition[j][i] = currentAssignment[config.staticPartition[i][j]];
     }
-    return clause;
+  return partition;
 }
 
 // returns false if a clause was added
@@ -186,6 +260,7 @@ bool GraphSolver::cutoffFunction()
   if (!checkPartiallyDefined(true)) // check all before creating cube
     return false;
 
+  printf("a");
   for (int i = 0; i < vertices; i++)
     for (int j = i + 1; j < vertices; j++)
     {
@@ -569,7 +644,7 @@ bool GraphSolver::solve()
       string lit;
       while (std::getline(iss, lit, ' '))
       {
-        if (lit.empty())
+        if (lit.empty() || lit == "a")
           continue;
         assumptions.push_back(stoi(lit));
       }
@@ -599,12 +674,12 @@ bool GraphSolver::solve()
       initTriangleMemory();
     if (config.timeout)
     {
-      if (!solve(vector<int>(), config.timeout))
+      if (!solve(config.assumptions, config.timeout))
         printf("Timeout reached\n");
     }
     else
     {
-      rv = solve(vector<int>());
+      rv = solve(config.assumptions);
     }
 
     if (!config.quiet)

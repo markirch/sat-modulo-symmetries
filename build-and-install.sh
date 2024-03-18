@@ -33,13 +33,23 @@ done
 
 CMAKE_BUILD_DIR="build"
 CMAKE_FLAGS="-B$CMAKE_BUILD_DIR -S."
+CONF_FLAGS="-fPIC"
 
 if [ $debug = 1 ]; then
+	msg "Build type set to DEBUG"
 	CMAKE_FLAGS="$CMAKE_FLAGS -DCMAKE_BUILD_TYPE=Debug"
+	CONF_FLAGS="$CONF_FLAGS -g"
+else
+	msg "Build type set to RELEASE"
 fi
 
 if [ $loc_inst = 1 ]; then
 	CMAKE_FLAGS="$CMAKE_FLAGS -DCMAKE_INSTALL_PREFIX=$HOME/.local"
+fi
+
+if [ ! -f "cadical/build/libcadical.a" ]; then
+	msg "Building CaDiCaL"
+	cd cadical && ./configure $CONF_FLAGS && make -j2 && cd ..
 fi
 
 if [ $glasgow = 1 ]; then

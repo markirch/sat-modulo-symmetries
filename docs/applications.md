@@ -1,7 +1,5 @@
 # Applications
 
-
-
 ## Kochen-Specker vector systems and Kochen-Specker graphs
 
 In the paper "Co-Certificate Learning with SAT Modulo Symmetries" we generated so called Kochen-Specker candidate graphs (short KS-candidates).
@@ -177,3 +175,15 @@ Last, we can simply test whether the graph $C_5[4,4,4,4,3]$ is biplanar, using t
   python ./encodings/planarity.py -v 19 --directed --earthmoon_candidate1
 ```
 
+
+## Computing small Rainbow Cycle Numbers
+
+For creating encodings related to computing the rainbow cycle number, we us the script `./encodings/efx.py`. The arguments `--partition-size` for the size of each block must be provided and 
+also the number of vertices must be specified. The number of blocks is computed automatically by the number of vertices and the size of the blocks. 
+For example 
+```bash
+python ./encodings/efx.py --directed --partition-size 3 -v 12
+```
+tries to compute a 4-partite graph without a rainbow cycle.
+Adding the argument `--permutation` results in restricting the search to permutations and `--efx-propagator` ensure the absence of a rainbow cycle using a propagator instead of a static encoding.
+For invariant pruning, we use a combination of two arguments for example `--delta-high-directed 6  --fix-first-vertex`. The first ensures that the outdegree is at most 6, the second that the first vertex cannot be permuted and it also must have outdegree exactly 6.

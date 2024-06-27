@@ -29,7 +29,6 @@ The paper is available [here](https://publik.tuwien.ac.at/files/publik_300078.pd
 	year  = {2023},
 	booktitle = {Proceedings of the 34th International Joint Conference on Artificial Intelligence, IJCAI 2023},
 	publisher = {AAAI Press/IJCAI}, 
-	note = {To appear}
 }
 ```
 
@@ -45,7 +44,6 @@ The paper is available [here](https://publik.tuwien.ac.at/files/publik_300078.pd
 	editor    = {Meena Mahajan and Friedrich Slivovsky},
 	series    = {LIPIcs},
 	publisher = {Schloss Dagstuhl - Leibniz-Zentrum f{\"{u}}r Informatik},
-	note      = {to appear}
 }
 ```
 
@@ -61,6 +59,19 @@ The paper is available [here](https://publik.tuwien.ac.at/files/publik_300078.pd
 	editor    = {Meena Mahajan and Friedrich Slivovsky},
 	series    = {LIPIcs},
 	publisher = {Schloss Dagstuhl - Leibniz-Zentrum f{\"{u}}r Informatik},
+}
+
+```
+
+## Computing small Rainbow Cycle Numbers with SAT modulo Symmetries
+```bibtex
+@InProceedings{KirchwegerSzeider24,
+	author       = {Markus Kirchweger and Stefan Szeider},
+	title        = {Computing small Rainbow Cycle Numbers with SAT modulo Symmetries},
+	booktitle = {30th International Conference on Principles and Practice of Constraint
+               Programming, {CP}, September 2-6, 2024, Girona, Catalonia},
+	year      = {2024},
+	series    = {LIPIcs},
 	note      = {to appear}
 }
 

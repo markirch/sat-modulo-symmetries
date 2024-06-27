@@ -10,14 +10,15 @@ SMS contains:
 - the enhanced solvers `smsg` and `smsd`, based on the award-winning SAT solver [CaDiCaL](https://github.com/arminbiere/cadical), which are the engine that generates undirected and directed graphs modulo isomorphisms;
 - the C++ libraries `libsms.a` and `libsmsdir.a`, which provide the same capabilities;
 - the Python library PySMS, which contains a collection of pre-defined constraints and an interface to start building your own graph generation scripts;
-- a collection of examples and applications.
+- a collection of examples and applications;
+- a 2QBF solver for modeling graphs with coNP properties. 
 
 ## Requirements
 
 In order to build SMS, you will need the following:
 
 - the SAT solver [CaDiCaL](https://github.com/arminbiere/cadical) (supplied with SMS);
-- the [Boost](https://www.boost.org/) library;
+- the [Boost](https://www.boost.org/) library including `libboost-program-options-dev` for parsing arguments;
 - [CMake](https://cmake.org); and
 - to install PySMS, [pip](https://pypi.org/project/pip).
 
@@ -93,6 +94,7 @@ The found graphs are printed to standard output as Python lists of edges.
 
 In order to only print the constraints (as a CNF formula in DIMACS) without solving, additionally pass `--no-solve`.
 In order to get the results in the `graph6` format (used by [Nauty](https://pallini.di.uniroma1.it/)), pass `--graph-format graph6`.
+(Note that this can slow down the computation significantly.)
 Below we provide a number of examples to illustrate the functionality.
 
 The most important options to `pysms.graph_builder` are as follows:

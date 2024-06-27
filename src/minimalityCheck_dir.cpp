@@ -1,6 +1,5 @@
 #include "minimalityCheck.hpp"
 
-#define MINIMIZE 1
 
 int reachedCutoff = 0;
 
@@ -17,7 +16,24 @@ void checkMinimality(adjacency_matrix_t &adjacency_matrix, vertex_ordering_t ver
 {
     // printf("min check\n");
     int count = 0;
-    isMinimal(vertex_ordering, config.initial_partition, 0, adjacency_matrix, config, count);
+    if (MAXIMIZE_SMS)
+    {
+        adjacency_matrix_t adjacency_matrix_copy = adjacency_matrix;
+        // flip adjacent to non adjacent and vice versa
+        for (int i = 0; i < (int) adjacency_matrix.size(); i++)
+        {
+            for (int j = 0; j < (int) adjacency_matrix.size(); j++)
+            {
+                if (adjacency_matrix[i][j] == truth_value_true)
+                    adjacency_matrix_copy[i][j] = truth_value_false;
+                else if (adjacency_matrix[i][j] == truth_value_false)
+                    adjacency_matrix_copy[i][j] = truth_value_true;
+            }
+        }
+        isMinimal(vertex_ordering, config.initial_partition, 0, adjacency_matrix_copy, config, count);
+    } else {
+        isMinimal(vertex_ordering, config.initial_partition, 0, adjacency_matrix, config, count);
+    }
     // printf("Number of calls %d\n", count);
 }
 
@@ -355,6 +371,14 @@ void createClause(vertex_ordering_t &vertices, adjacency_matrix_t &adjacency_mat
                 minimalit_check_result_t res;
                 res.permutation = vertices;
                 res.clause = edges;
+                if (MAXIMIZE_SMS)
+                {
+                    // reverse signes of edges
+                    for (int i = 0; i < (int)edges.size(); i++)
+                    {
+                        edges[i].first = (edges[i].first == truth_value_true) ? truth_value_false : truth_value_true;
+                    }
+                }
                 throw res;
             }
 

@@ -20,6 +20,9 @@ namespace po = boost::program_options;
 #include "connectedChecker.hpp"
 #include "universal.hpp"
 #include "universal2.hpp"
+#include "subgraphIsomorphism.hpp"
+#include "efx.hpp"
+#include "domination.hpp"
 
 int fixedSubgraphSize; // for the sake of simplicity i made global variables
 int nextFreeVariableUniversal;
@@ -31,6 +34,7 @@ int frequencyForbiddenSubgraphs;
 int coloringAlgo; // 0 = simple, 1 = DPLL, 2 = SAT
 int independenceNumberUpperBound;
 int cliqueNumberUpperBound;
+int kConnected; // ensures that at least k connected i.e., deleting fewer than k vertices does not disconnect the graph
 
 bool triangleVersion;
 int triangleVars = 0; // starting point of triangle variables if used
@@ -68,11 +72,18 @@ int main(int argc, char const **argv)
     std::ifstream forAllFileQCIRAssumptions;
     std::ifstream forbiddenSubgraphFile;
     std::ifstream forbiddenInducedSubgraphFile;
+    std::ifstream forbiddenSubgraphFileCadical;
     std::ifstream qcirFile;
 
     pair<int, int> minChomaticNumberSubgraph; // first give minimum chromatic number, second the size
     int minChromaticIndexHypergraph = 0;      // Minimum edge chromatic number of the hypergraph
     pair<int, int> rangeCubesTemp;
+
+    int efxPartitions; // number of partitions for the EFX propagator
+    int efxFrequency;  // frequency for the EFX propagator
+
+    int dominationNumInterfaces;
+    int dominationSizeOfInterface;
 
     SolverConfig config;
     config.quiet = false;
@@ -186,6 +197,15 @@ int main(int argc, char const **argv)
       ("clique-number-upp", po::value<int>(&cliqueNumberUpperBound), "Upper bound on the clique number")
       
 #endif
+      ("forbidden-subgraphs-cadical", po::value<std::string>()->notifier([&forbiddenSubgraphFileCadical](const std::string &value)
+                                                                       {
+          forbiddenSubgraphFileCadical = std::ifstream(value);
+          if (forbiddenSubgraphFileCadical.fail()) {
+              std::cerr << "Failed to open forbidden subgraphs file." << std::endl;
+              std::exit(EXIT_FAILURE);
+          } }),
+              "File with a list of the forbidden subgraphs which will be excluded during search with Cadical")
+
       ("no-SMS", po::bool_switch(&config.turnoffSMS), "Turn off SMS, i.e., no minimality check")
       ("initial-partition", po::value<std::vector<int>>(&initialPartitionArguments)->multitoken(),
               "Set the initial partition for the minimality check, given as a sequence of partition sizes (integers). The minimality check will look for permutations that preserve partition membership")
@@ -217,7 +237,32 @@ int main(int argc, char const **argv)
           if (values.size() == 2)
               minChomaticNumberSubgraph = std::make_pair(values[0], values[1]); }),
           "The value (k, s) means that the induced subgraph spanned by the vertices 0 .. s-1 should have chromatic number at least k")
-      ("fixed-subgraph-size", po::value<int>(&fixedSubgraphSize), "Disable permuting vertices of the lowest k vertices (symmetry breaking becomes incomplete)");
+      ("fixed-subgraph-size", po::value<int>(&fixedSubgraphSize), "Disable permuting vertices of the lowest k vertices (symmetry breaking becomes incomplete)")
+      ("efx", po::value<std::vector<int>>()->multitoken()->composing()->notifier([&efxPartitions, &efxFrequency](const std::vector<int> &values)
+                                                                                   {
+          if (values.size() == 2)
+          {
+              efxPartitions = values[0];
+              efxFrequency = values[1];
+          } else {
+              std::cerr << "Error: EFX option requires two arguments" << std::endl;
+              std::exit(EXIT_FAILURE);
+          }
+      }),
+        "The value (p, f) means that the EFX propagator should be used with p partitions and called every f-th propagation fixpoint")
+      ("domination-connectedness", po::value<std::vector<int>>()->multitoken()->composing()->notifier([&dominationNumInterfaces, &dominationSizeOfInterface](const std::vector<int> &values)
+                                                                                   {
+          if (values.size() == 2)
+          {
+              dominationNumInterfaces = values[0];
+              dominationSizeOfInterface = values[1];
+          } else {
+              std::cerr << "Error: domination-connectedness option requires exactly two arguments" << std::endl;
+              std::exit(EXIT_FAILURE);
+          }
+      }),
+        "The first value gives the number of interfaces the second the size of the interfaces")
+      ("k-connected", po::value<int>(&kConnected), "Ensure that the graph is at least k connected. Currently only implemented for k <= 3");
 
     po::options_description perf_opts{"Performance options"};
 
@@ -272,7 +317,7 @@ int main(int argc, char const **argv)
         std::cout << "Error: Unknown option '" << e.get_option_name() << "'" << std::endl;
         std::cout << "Note that when using pysms the unknown arguments are forwarded to smsg/smsd." << std::endl;
         std::cout << all_opts << std::endl;
-        return EXIT_FAILURE; 
+        return EXIT_FAILURE;
     }
 
     if (vm.count("help"))
@@ -377,7 +422,7 @@ int main(int argc, char const **argv)
     printf("Number of vertices: %d\n", vertices);
 
     assert(!config.initialPartition.empty());
-    assert((int) config.initialPartition.size() == vertices);
+    assert((int)config.initialPartition.size() == vertices);
 
     if (fixedSubgraphSize != 0)
     {
@@ -553,6 +598,11 @@ int main(int argc, char const **argv)
         solver->addFullyDefinedGraphChecker(new ConnectedChecker());
     }
 
+    if (kConnected)
+    {
+        solver->addFullyDefinedGraphChecker(new KConnectedChecker(kConnected));
+    }
+
 #ifdef GLASGOW
     if (frequencyForbiddenSubgraphs == 0)
         frequencyForbiddenSubgraphs = vertices > 2 ? vertices : 3;
@@ -565,6 +615,9 @@ int main(int argc, char const **argv)
     if (cliqueNumberUpperBound)
         solver->addPartiallyDefinedGraphChecker(new MaxCliqueChecker(frequencyForbiddenSubgraphs, cliqueNumberUpperBound));
 #endif
+
+    if (forbiddenSubgraphFileCadical.is_open())
+        solver->addPartiallyDefinedGraphChecker(new ForbiddenSubgraphChecker(200, forbiddenSubgraphFileCadical, vertices));
 
     if (forAllFile.is_open())
     {
@@ -625,6 +678,17 @@ int main(int argc, char const **argv)
     {
         solver->addComplexFullyDefinedGraphChecker(new GreedyColoring(coloringAlgo, config.edges, greedyColoring));
     }
+
+    if (efxPartitions)
+    {
+        solver->addPartiallyDefinedGraphChecker(new EFXPropagator(efxFrequency, vertices, efxPartitions));
+    }
+
+    if (dominationNumInterfaces)
+    {
+        solver->addFullyDefinedGraphChecker(new QuasiKConnectedPropagator(dominationSizeOfInterface, dominationNumInterfaces));
+    }
+
     solver->solve();
 
     printf("Total time: %f\n", ((double)clock() - solver->stats.start) / CLOCKS_PER_SEC);

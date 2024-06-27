@@ -30,6 +30,12 @@ void MinimalityChecker::checkProperty(const adjacency_matrix_t &matrix)
         {
             for (size_t i = 0; i < signedEdges.size(); i++)
                 fprintf(symBreakClauses, "%s(%d,%d) ", signedEdges[i].first == truth_value_true ? "-" : "", signedEdges[i].second.first, signedEdges[i].second.second);
+            // fprintf(symBreakClauses, "\n");
+
+            fprintf(symBreakClauses, ";");
+            // print permutation
+            for (auto v: e.permutation)
+                fprintf(symBreakClauses, " %d", v);
             fprintf(symBreakClauses, "\n");
         }
         throw signedEdges;

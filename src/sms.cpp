@@ -215,18 +215,29 @@ bool GraphSolver::cutoffFunction()
         if (matrix[i][j] != truth_value_unknown)
           nAssigned++;
 
+#ifdef DIRECTED
+    // check other direction
+    for (int i = 0; i < vertices; i++)
+      for (int j = i + 1; j < vertices; j++)
+        if (matrix[j][i] != truth_value_unknown)
+          nAssigned++;
+#endif
+
     if (nAssigned <= config.assignmentCutoff)
       return true;
   }
   else
   {
-    // score = sum log_2 ( 1 / p_e )
-    // where p_e is the empirically recorded frequency of e
-    // for balanced variables that are true half the time,
-    // the contribution towards the score is 1
-    // this is supposed to measure the search-space reduction
-    // in the number of bits
-    double assignmentScore = 0.0;
+#ifdef DIRECTED
+    EXIT_UNWANTED_STATE // not supported yet
+#endif
+        // score = sum log_2 ( 1 / p_e )
+        // where p_e is the empirically recorded frequency of e
+        // for balanced variables that are true half the time,
+        // the contribution towards the score is 1
+        // this is supposed to measure the search-space reduction
+        // in the number of bits
+        double assignmentScore = 0.0;
     for (int i = 0; i < vertices; i++)
     {
       for (int j = i + 1; j < vertices; j++)
@@ -261,6 +272,19 @@ bool GraphSolver::cutoffFunction()
     return false;
 
   printf("a");
+
+#ifdef DIRECTED
+  for (int i = 0; i < vertices; i++)
+    for (int j = 0; j < vertices; j++)
+    {
+      if (i == j)
+        continue;
+      if (matrix[i][j] == truth_value_true)
+        printf(" %d", edges[i][j]);
+      if (matrix[i][j] == truth_value_false)
+        printf(" -%d", edges[i][j]);
+    }
+#else
   for (int i = 0; i < vertices; i++)
     for (int j = i + 1; j < vertices; j++)
     {
@@ -269,8 +293,24 @@ bool GraphSolver::cutoffFunction()
       if (matrix[i][j] == truth_value_false)
         printf(" -%d", edges[i][j]);
     }
+
+#endif
+
   printf("\n");
   vector<lit_t> clause;
+
+#ifdef DIRECTED
+  for (int i = 0; i < vertices; i++)
+    for (int j = 0; j < vertices; j++)
+    {
+      if (i == j)
+        continue;
+      if (matrix[i][j] == truth_value_true)
+        clause.push_back(-edges[i][j]);
+      if (matrix[i][j] == truth_value_false)
+        clause.push_back(edges[i][j]);
+    }
+#else
   for (int i = 0; i < vertices; i++)
     for (int j = i + 1; j < vertices; j++)
     {
@@ -279,6 +319,7 @@ bool GraphSolver::cutoffFunction()
       if (matrix[i][j] == truth_value_false)
         clause.push_back(edges[i][j]);
     }
+#endif
 
   // printf("Size %ld\n", clause.size());
   addClause(clause, false);

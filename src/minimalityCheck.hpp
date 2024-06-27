@@ -4,6 +4,8 @@
 #include "useful.h"
 #include "graphChecker.hpp"
 
+#define MAXIMIZE_SMS 0
+
 class LimitReachedException
 {
 };

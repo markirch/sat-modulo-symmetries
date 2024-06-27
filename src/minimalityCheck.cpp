@@ -1,7 +1,5 @@
 #include "minimalityCheck.hpp"
 
-#define MAXIMIZE 0
-
 int reachedCutoff = 0;
 
 // internal functions
@@ -15,7 +13,7 @@ int getElementFromArray(int *array, int n, int elem);
 
 void checkMinimality(adjacency_matrix_t &adjacency_matrix, vertex_ordering_t vertex_ordering, minimalit_check_config_t config)
 {
-    if (MAXIMIZE)
+    if (MAXIMIZE_SMS)
     {
         auto adj_copy = adjacency_matrix; // avoid side effects by copying
         // printf("Before:");
@@ -334,7 +332,7 @@ void createClause(vertex_ordering_t &vertices, adjacency_matrix_t &adjacency_mat
                 //         fprintf(symBreakClausesFile, "%d ", vertices[i]);
                 //     fprintf(symBreakClausesFile, "; ");
                 // }
-                if (MAXIMIZE)
+                if (MAXIMIZE_SMS)
                 {
                     // flip sign of all the edges
                     for (size_t i = 0; i < edges.size(); i++)
@@ -654,7 +652,7 @@ void createClauseMultiple(vertex_ordering_t &vertices, vector<adjacency_matrix_t
                     //         fprintf(symBreakClausesFile, "%d ", vertices[i]);
                     //     fprintf(symBreakClausesFile, "; ");
                     // }
-                    if (MAXIMIZE)
+                    if (MAXIMIZE_SMS)
                     {
                         // flip sign of all the edges
                         for (int a = 0; a < m; a++)

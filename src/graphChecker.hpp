@@ -17,7 +17,7 @@ protected:
     long long calls = 0;           // number of times the property was checked
     clock_t time = 0;              // total time for checking the property
     long numberOfAddedClauses = 0; // total number of added clauses
-    long long limit_reached = 0;    // count calls which did not provide a conclusive answer
+    long long limit_reached = 0;   // count calls which did not provide a conclusive answer
 
 public:
     void printStats()
@@ -27,8 +27,9 @@ public:
         std::cout << "\tCalls: " << calls << std::endl;
         std::cout << "\tTime in seconds: " << ((double)time) / CLOCKS_PER_SEC << std::endl;
         std::cout << "\tAdded clauses: " << numberOfAddedClauses << std::endl;
-        if (limit_reached > 0) {
-          std::cout << "\tLimit reached: " << limit_reached << std::endl;
+        if (limit_reached > 0)
+        {
+            std::cout << "\tLimit reached: " << limit_reached << std::endl;
         }
     }
 };
@@ -40,6 +41,8 @@ public:
     int counter = 0; // number of calls since last check
     int frequency = 30;
     bool checkFinal = true; // force check for fully defined graphs
+
+    PartiallyDefinedGraphChecker(int frequency = 30) : frequency(frequency){};
 
     /**
      * @brief Check partially defined graph and throw partially defined graph which should be forbidden

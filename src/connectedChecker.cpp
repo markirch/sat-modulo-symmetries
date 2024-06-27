@@ -45,3 +45,116 @@ void ConnectedChecker::checkProperty(const adjacency_matrix_t &matrix)
     }
   }
 }
+
+bool checkConnected(const adjacency_matrix_t &matrix, const vector<bool> removedVertices, vector<int> &component, const int numRemoved)
+{
+  // check if the graph is connected if not component contains the vertices of one connected component
+  int n = (int)matrix.size();
+  int minVertex = -1; // smallest vertex in the graph which wasn't removed
+  for (int i = 0; i < n; i++)
+  {
+    if (!removedVertices[i])
+    {
+      minVertex = i;
+      break;
+    }
+  }
+  vector<bool> visited(n, false);
+  vector<int> queue;
+  visited[minVertex] = true;
+  int numVisited = 1;
+  queue.push_back(minVertex);
+  while (!queue.empty())
+  {
+    int v = queue.back();
+    queue.pop_back();
+    for (int i = 0; i < n; i++)
+    {
+      if (matrix[v][i] == truth_value_true && !visited[i] && !removedVertices[i])
+      {
+        visited[i] = true;
+        numVisited++;
+        queue.push_back(i);
+      }
+    }
+  }
+
+  if (numVisited < n - numRemoved)
+  {
+    for (int i = 0; i < n; i++)
+      if (visited[i] && !removedVertices[i])
+        component.push_back(i);
+    return false;
+  }
+
+  return true;
+}
+
+bool testKConnected(const int k, const adjacency_matrix_t &matrix, vector<int> &component, vector<bool> &removedVertices)
+{
+  int n = (int)matrix.size();
+  if (k == 3)
+    for (int i1 = 0; i1 < n; i1++)
+      for (int i2 = i1 + 1; i2 < n; i2++)
+      {
+
+        removedVertices = vector<bool>(n, false);
+        removedVertices[i1] = true;
+        removedVertices[i2] = true;
+        if (!checkConnected(matrix, removedVertices, component, k - 1))
+        {
+          return false;
+        }
+      }
+  else if (k == 2)
+    for (int i1 = 0; i1 < n; i1++)
+    {
+      removedVertices = vector<bool>(n, false);
+      removedVertices[i1] = true;
+      if (!checkConnected(matrix, removedVertices, component, k - 1))
+      {
+        return false;
+      }
+    }
+  else if (k == 1)
+  {
+    removedVertices = vector<bool>(n, false);
+    if (!checkConnected(matrix, removedVertices, component, k - 1))
+    {
+      return false;
+    }
+  }
+  else
+  {
+    printf("Error: k = %d not supported\n", k);
+    EXIT_UNWANTED_STATE
+  }
+  return true;
+}
+
+void KConnectedChecker::checkProperty(const adjacency_matrix_t &matrix)
+{
+  vector<int> component;
+  vector<bool> removedVertices;
+  if (!testKConnected(k, matrix, component, removedVertices))
+  {
+    forbidden_graph_t forbiddenGraph;
+    int n = (int)matrix.size();
+    for (int i = 0; i < n; i++)
+    {
+      if (removedVertices[i])
+        continue;
+
+      for (int j = 0; j < n; j++)
+      {
+        if (removedVertices[j])
+          continue;
+
+        // if exactly one of them is in the component
+        if ((find(component.begin(), component.end(), i) != component.end()) != (find(component.begin(), component.end(), j) != component.end()))
+          forbiddenGraph.push_back({truth_value_false, {i, j}});
+      }
+    }
+    throw forbiddenGraph;
+  }
+}

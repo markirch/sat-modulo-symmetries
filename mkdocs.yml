@@ -11,11 +11,7 @@ plugins:
           options:
             docstring_style: sphinx
 markdown_extensions:
-  - markdown_include.include:
-      base_path: .
   - admonition
-
-markdown_extensions:
   - pymdownx.arithmatex:
       generic: true
   

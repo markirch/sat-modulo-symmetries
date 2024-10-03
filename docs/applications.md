@@ -2,7 +2,7 @@
 
 ## Kochen-Specker vector systems and Kochen-Specker graphs
 
-In the paper "Co-Certificate Learning with SAT Modulo Symmetries" we generated so called Kochen-Specker candidate graphs (short KS-candidates).
+In the paper "Co-Certificate Learning with SAT Modulo Symmetries"([link](https://www.ijcai.org/proceedings/2023/0216.pdf)) we generated so called Kochen-Specker candidate graphs (short KS-candidates).
 The script `./encodings/kochen_specker.py` can be used to reproduce the results. 
 
 The following command can be used to generate all KS-candidates with 19 vertices:
@@ -27,7 +27,7 @@ To solve the problem with the cubes stored in the file `cubeFile`, we use the fo
 ## Erdős–Faber–Lovász conjecture
 
 All encodings related to the EFL Conjecture are generated and solved by the script `./encodings/efl.py`.
-The encoding is based on an incidence matrix to represent a hypergraph, i.e., the matrix indicates which vertices belong to which edge.
+The encoding is based on an incidence matrix to represent a hypergraph, i.e., the matrix indicates which vertices belong to which edge. For all details we refer to the paper ([link](https://drops.dagstuhl.de/entities/document/10.4230/LIPIcs.SAT.2023.13)).
 
 The most important arguments are as follows:
 
@@ -56,7 +56,7 @@ Similar, we can check the FB Conjecture using the same script and the argument `
 ## Planar graphs, Earth-Moon Problem, planar Turan Numbers and generation of OEIS integer sequences related to planar graphs
 
 To enumerate planar graphs, using different encodings, 
-use `./encodings/planar.py` with the following commands (`$n` stands for the number of vertices):
+use `./encodings/planar.py` with the following commands (`$n` stands for the number of vertices). The theoretical part is described in the paper "SAT-Based Generation of Planar Graphs" ([link](https://drops.dagstuhl.de/entities/document/10.4230/LIPIcs.SAT.2023.14)):
 
 <ul>
   <li>Kuratowski based encoding:

@@ -2,22 +2,19 @@
 
 ## SAT Modulo Symmetries for Graph Generation
 
-The paper is available [here](https://publik.tuwien.ac.at/files/publik_300078.pdf).
+The paper is available [here](https://doi.org/10.1145/3670405)
 
 ```bibtex
-@inproceedings{KirchwegerS21,
+@inproceedings{KirchwegerS24,
   author    = {Markus Kirchweger and
                Stefan Szeider},
-  title     = {{SAT} Modulo Symmetries for Graph Generation},
-  booktitle = {27th International Conference on Principles and Practice of Constraint
-               Programming, {CP} 2021, Montpellier, France (Virtual Conference),
-               October 25-29, 2021},
-  series    = {LIPIcs},
-  volume    = {210},
-  pages     = {34:1--34:16},
-  publisher = {Schloss Dagstuhl - Leibniz-Zentrum f{\"{u}}r Informatik},
-  year      = {2021},
-  doi       = {10.4230/LIPIcs.CP.2021.34}
+  title = {SAT Modulo Symmetries for Graph Generation and Enumeration},
+  year = {2024},
+  publisher = {Association for Computing Machinery},
+  volume = {25},
+  number = {3},
+  issn = {1529-3785},
+  doi = {10.1145/3670405},
 }
 ```
 
@@ -28,7 +25,8 @@ The paper is available [here](https://publik.tuwien.ac.at/files/publik_300078.pd
 	author= {Kirchweger, Markus and Peitl, Tom\'{a}\v{s} and Szeider, Stefan},
 	year  = {2023},
 	booktitle = {Proceedings of the 34th International Joint Conference on Artificial Intelligence, IJCAI 2023},
-	publisher = {AAAI Press/IJCAI}, 
+	publisher = {AAAI Press/IJCAI},
+	doi = {10.24963/IJCAI.2023/216},
 }
 ```
 
@@ -44,6 +42,7 @@ The paper is available [here](https://publik.tuwien.ac.at/files/publik_300078.pd
 	editor    = {Meena Mahajan and Friedrich Slivovsky},
 	series    = {LIPIcs},
 	publisher = {Schloss Dagstuhl - Leibniz-Zentrum f{\"{u}}r Informatik},
+	doi          = {10.4230/LIPICS.SAT.2023.14},
 }
 ```
 
@@ -59,6 +58,7 @@ The paper is available [here](https://publik.tuwien.ac.at/files/publik_300078.pd
 	editor    = {Meena Mahajan and Friedrich Slivovsky},
 	series    = {LIPIcs},
 	publisher = {Schloss Dagstuhl - Leibniz-Zentrum f{\"{u}}r Informatik},
+	doi          = {10.4230/LIPICS.SAT.2023.13},
 }
 
 ```
@@ -68,11 +68,51 @@ The paper is available [here](https://publik.tuwien.ac.at/files/publik_300078.pd
 @InProceedings{KirchwegerSzeider24,
 	author       = {Markus Kirchweger and Stefan Szeider},
 	title        = {Computing small Rainbow Cycle Numbers with SAT modulo Symmetries},
-	booktitle = {30th International Conference on Principles and Practice of Constraint
-               Programming, {CP}, September 2-6, 2024, Girona, Catalonia},
-	year      = {2024},
-	series    = {LIPIcs},
-	note      = {to appear}
+	booktitle    = {30th International Conference on Principles and Practice of Constraint
+                  Programming, {CP} 2024, September 2-6, 2024, Girona, Spain},			  
+	series       = {LIPIcs},
+	volume       = {307},
+	pages        = {37:1--37:11},
+	publisher    = {Schloss Dagstuhl - Leibniz-Zentrum f{\"{u}}r Informatik},
+	year         = {2024},
+	doi      = {10.4230/LIPICS.CP.2024.37},
 }
 
+```
+
+## Searching for Smallest Universal Graphs and Tournaments with SAT
+
+```bibtex
+@inproceedings{ZhangS23,
+  author       = {Tianwei Zhang and
+                  Stefan Szeider},
+  title        = {Searching for Smallest Universal Graphs and Tournaments with {SAT}},
+  booktitle    = {29th International Conference on Principles and Practice of Constraint
+                  Programming, {CP} 2023, August 27-31, 2023, Toronto, Canada},
+  series       = {LIPIcs},
+  volume       = {280},
+  pages        = {39:1--39:20},
+  publisher    = {Schloss Dagstuhl - Leibniz-Zentrum f{\"{u}}r Informatik},
+  year         = {2023},
+  doi          = {10.4230/LIPICS.CP.2023.39},
+}
+```
+
+## Small Unsatisfiable k-CNFs with Bounded Literal Occurrence
+
+```bibtex
+@inproceedings{ZhangPS24,
+  author       = {Tianwei Zhang and
+                  Tom{\'{a}}s Peitl and
+                  Stefan Szeider},
+  title        = {Small Unsatisfiable k-CNFs with Bounded Literal Occurrence},
+  booktitle    = {27th International Conference on Theory and Applications of Satisfiability
+                  Testing, {SAT} 2024, August 21-24, 2024, Pune, India},
+  series       = {LIPIcs},
+  volume       = {305},
+  pages        = {31:1--31:22},
+  publisher    = {Schloss Dagstuhl - Leibniz-Zentrum f{\"{u}}r Informatik},
+  year         = {2024},
+  doi          = {10.4230/LIPICS.SAT.2024.31},
+}
 ```

@@ -35,13 +35,7 @@ git clone https://github.com/markirch/sat-modulo-symmetries
 cd sat-modulo-symmetries
 ```
 
-build CaDiCaL with
-```
-cd cadical
-./configure && make
-```
-as per its build instructions.
-Then, build SMS with:
+and build SMS with:
 
 ```bash
 chmod +x build-and-install.sh
@@ -50,7 +44,12 @@ chmod +x build-and-install.sh
 
 `build-and-install.sh` uses CMake, the built binaries are found in `build/src/`.
 The executables, static libraries, and required headers are automatically installed to the default location (something like `/usr/local/`, which probably requires root privileges, for which `build-and-install.sh` will ask).
-Use `build-and-install.sh -l` instead if you don't have administrative priveleges and need to install locally (see `-h` for more options).
+
+!!! note
+	Use `build-and-install.sh -l` instead if you don't have administrative priveleges and need to install locally (see `-h` for more options).
+
+!!! warning
+	An earlier version of this manual recommended to first build CaDiCaL. This step is now included in `build-and-install.sh` and **should not** be performed separately. If you build CaDiCaL separately, you need to make sure it is configured with `-fPIC`.
 
 `smsg` generates undirected graphs, `smsd` is for directed graphs.
 Likewise use `libsms.a` to generate undirected graphs, and `libsmsdir.a` for directed ones.
@@ -80,7 +79,10 @@ This includes generation of graphs with forbidden (induced) subgraphs, constrain
 
 ## Quick Start: PySMS
 
-If you followed the installation process, the package `pysms` is installed and available for import (the installed importable module is `pysms`, but the pip package is called `sms-graph-builder`, and it can be removed with `pip uninstall sms-graph-builder` as usual).
+If you followed the installation process, the package `pysms` is installed and available for import.
+
+!!! note
+	The installed importable module is `pysms`, but the pip package is called `sms-graph-builder`, and it can be removed with `pip uninstall sms-graph-builder` as usual.
 
 The main functionality is located in the `pysms.graph_builder` module, which can be imported for use in scripts (next section), or called directly from the command line, which is the easiest way to start using PySMS.
 
@@ -112,7 +114,9 @@ and some commonly required bounds:
 - `--delta-low` : a lower bound on the minimum degree.
 
 Any unrecognized arguments will be forwarded to `smsg`/`smsd` when in solving mode (and ignored with `--no-solve`), so any options that can be set for SMS can also be used through PySMS.
-The legacy option to forward arguments to SMS via `--args-SMS` is now deprecated (but still available).
+
+!!! note
+	The legacy way of forwarding arguments to SMS via `--args-SMS` is now deprecated.
 
 To get a complete list of all available options for the encoding builder, run 
 
@@ -135,7 +139,7 @@ The graphs can be filtered afterwards with tools like [Nauty](https://pallini.di
 
 ### Using the Encoding Builder in Scripts
 
-In the first example, we see how to create a simple script that uses `GraphEncodingBuilder` to create constraints which describe graphs with 7 vertices and maximum degree at most 3.
+In the first example, we will see how to create a simple script that uses the `GraphEncodingBuilder` class to create constraints which describe graphs with 7 vertices and maximum degree at most 3.
 
 ```python
 from pysms.graph_builder import GraphEncodingBuilder
@@ -144,9 +148,9 @@ builder.maxDegree(3)
 builder.solve(allGraphs=True)
 ```
 
-The `builder` object contains the encoding and all necessary metadata such as the number of vertices and how to map edges to literals. 
+The `builder` object contains the encoding and all necessary metadata such as the number of vertices and how to map edges to propositional variables. 
 The vertices are represented by the integers `0..n-1`.
-A clause can be added using `builder.append(clause)`.  
+A clause can be added using `builder.append(clause)`.
 
 The second example shows how one can add custom constraints, in this case to enumerate all triangle-free graphs with 7 vertices.
 
@@ -162,11 +166,12 @@ builder.solve(allGraphs=True)
 The function `builder.var_edge(i,j)` returns the Boolean variable associated with the edge {i,j}.
 So, `[-builder.var_edge(i,j), -builder.var_edge(i,k), -builder.var_edge(j,k)]` represents a clause (a disjunction) that ensures that at least one of the named pairs of vertices has no edge between them, or in other words that the vertex triple `i,j,k` doesn't form a triangle.
 
+!!! note
+	The verbose triangle-forbidding code from the previous example can be obtained with the builtin function `GraphEncodingBuilder.ckFree(3)`; we use it for the next example.
+
 The third example goes beyond the builtin functions and encodes _maximal_ triangle-free graphs, i.e. such triangle-free graphs where the addition of any edge creates a triangle (in other words, triangle-free graphs with _diameter_ 2; where any two non-neighbors have a common neighbor).
 Notice how in this example we need to create and use _auxiliary_ variables: fresh propositional variables other than those that correspond to edges.
 The auxiliary variables are created and returned by `CNF_AND`, and encode the existence of a joint neighbor.
-
-Note that an equivalent of the rather verbose triangle-forbidding code from the previous example can be achieved with `GraphEncodingBuilder.ckFree(3)`, which we use below.
 
 ```python
 from pysms.graph_builder import GraphEncodingBuilder

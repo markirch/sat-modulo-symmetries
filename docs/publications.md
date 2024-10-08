@@ -5,11 +5,12 @@
 The paper is available [here](https://doi.org/10.1145/3670405)
 
 ```bibtex
-@inproceedings{KirchwegerS24,
+@article{KirchwegerS24,
   author    = {Markus Kirchweger and
                Stefan Szeider},
   title = {SAT Modulo Symmetries for Graph Generation and Enumeration},
   year = {2024},
+  journal   = {{ACM} Trans. Comput. Log.},
   publisher = {Association for Computing Machinery},
   volume = {25},
   number = {3},

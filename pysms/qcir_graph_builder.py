@@ -131,17 +131,32 @@ def getDefaultParser():
 
     main_args = parser.add_argument_group(title="Main arguments", description="The number of vertices is mandatory, everything else is optional")
     solve_args = parser.add_argument_group(title="Solver options")
-    constraint_args = parser.add_argument_group(title="Graph constraints", description="A set of pre-defined constraints for common applications, including applications from SMS papers")
+    constraint_args = parser.add_argument_group(
+        title="Graph constraints", description="A set of pre-defined constraints for common applications, including applications from SMS papers"
+    )
 
     main_args.add_argument("--vertices", "-v", type=int, required=True, help="number of vertices")
     main_args.add_argument("--directed", "->", action="store_true", help="search for directed graphs")
     main_args.add_argument("--print-dimacs", action="store_true", help="Print output in DIMACS format assuming no quantifiers")
 
     # solve options
-    solve_args.add_argument("--all-graphs", "-a", action="store_true", help="generate all graphs (without this, the solver will exit after the first solution)")
-    solve_args.add_argument("--hide-graphs", "-hg", action="store_true", help="do not display graphs (meant as a counting functionality, though the graphs still need to be enumerated)")
-    solve_args.add_argument("--args-SMS", type=str, default="", help="command line to be appended to the call to smsg/smsd (see src/main.cpp or README.md)")
-    solve_args.add_argument("--print-cnf", type=str, help="don't run SMS, only generate a CNF encoding of the gate omitting the quantifiers and print it to the given file")
+    solve_args.add_argument(
+        "--all-graphs", "-a", action="store_true", help="generate all graphs (without this, the solver will exit after the first solution)"
+    )
+    solve_args.add_argument(
+        "--hide-graphs",
+        "-hg",
+        action="store_true",
+        help="do not display graphs (meant as a counting functionality, though the graphs still need to be enumerated)",
+    )
+    solve_args.add_argument(
+        "--args-SMS", type=str, default="", help="command line to be appended to the call to smsg/smsd (see src/main.cpp or README.md)"
+    )
+    solve_args.add_argument(
+        "--print-cnf",
+        type=str,
+        help="don't run SMS, only generate a CNF encoding of the gate omitting the quantifiers and print it to the given file",
+    )
     solve_args.add_argument("--print-qcir", type=str, help="don't run SMS, only generate a QCIR encoding of the gate and print it to the given file")
     solve_args.add_argument("--qcir-file", type=str, help="file to store the temporary qcir encoding later used by SMS")
     solve_args.add_argument("--graph6-format", action="store_true", help="output graphs in graph6 format (Warning: Relatively slow)")
@@ -161,14 +176,23 @@ def getDefaultParser():
     constraint_args.add_argument("--Ck-free", type=int, help="forbid the k-cycle C_k as (non-induced) subgraph")
 
     # treewidth
-    constraint_args.add_argument("--tree-width-upp-version1", type=int, help="ensure that the treewidth is at most a certain value using a compact encoding but using more variables")
+    constraint_args.add_argument(
+        "--tree-width-upp-version1",
+        type=int,
+        help="ensure that the treewidth is at most a certain value using a compact encoding but using more variables",
+    )
     constraint_args.add_argument("--tree-width-upp-version2", "--tw", type=int, help="ensure that the treewidth is at most a certain value")
-    constraint_args.add_argument("--tree-width-low-version1", type=int, help="ensure that the treewidth is at least a certain value using a compact encoding but using more variables")
+    constraint_args.add_argument(
+        "--tree-width-low-version1",
+        type=int,
+        help="ensure that the treewidth is at least a certain value using a compact encoding but using more variables",
+    )
     constraint_args.add_argument("--tree-width-low-version2", type=int, help="ensure that the treewidth is at least a certain value")
 
-    constraint_args.add_argument("--tree-width-vertex-critical", "--twvc", type=int, help="ensure that deleting any vertex results in treewidth the given value - 1")
+    constraint_args.add_argument(
+        "--tree-width-vertex-critical", "--twvc", type=int, help="ensure that deleting any vertex results in treewidth the given value - 1"
+    )
     constraint_args.add_argument("--tree-width-critical", "--twc", type=int, help="ensure that every minor has treewidth given value - 1")
-
 
     # coloring
     constraint_args.add_argument("--chi-low", type=int, help="Minimum chromatic number")
@@ -186,7 +210,9 @@ def getDefaultParser():
     constraint_args.add_argument("--two-connected", action="store_true", help="deleting any vertex doesn't make the graph disconnected")
 
     constraint_args.add_argument(
-        "--folkmann", type=int, help="ensures that each 2 coloring has a monochromatic edge and that there is no clique of size given value (some additional constraints are added)"
+        "--folkmann",
+        type=int,
+        help="ensures that each 2 coloring has a monochromatic edge and that there is no clique of size given value (some additional constraints are added)",
     )
 
     constraint_args.add_argument("--maximal-4-clique-free", action="store_true", help="no 4-clique and inserting any edge results in a 4-clique")
@@ -194,10 +220,16 @@ def getDefaultParser():
     constraint_args.add_argument("--max-independent-set", type=int, help="maximum independent set of given size")
 
     constraint_args.add_argument("--min-domination-number", type=int, help="lower bound on the domation number")
-    constraint_args.add_argument("--three-decomposition-conjecture", action="store_true", help="search for counter example to 3-decomposition conjecture")
+    constraint_args.add_argument(
+        "--three-decomposition-conjecture", action="store_true", help="search for counter example to 3-decomposition conjecture"
+    )
     constraint_args.add_argument("--bipartite", action="store_true", help="ensure that graph is bipartite")
-    constraint_args.add_argument("--domination-conjecture", action="store_true", help="ensure that resulting graph is cubic and has domination number > ceil(n/3) ")
-    constraint_args.add_argument("--min-girth-compact", type=int, help="compact encoding to ensure that the girth is at least k, i.e., no cycle with length < k")
+    constraint_args.add_argument(
+        "--domination-conjecture", action="store_true", help="ensure that resulting graph is cubic and has domination number > ceil(n/3) "
+    )
+    constraint_args.add_argument(
+        "--min-girth-compact", type=int, help="compact encoding to ensure that the girth is at least k, i.e., no cycle with length < k"
+    )
 
     constraint_args.add_argument("--canonical-qbf", action="store_true", help="use universal variables to ennsure that the graph is lex-minimal")
     constraint_args.add_argument("--canonical-qbf-colex", action="store_true", help="same as canonical-qbf but using colex ordering")
@@ -489,7 +521,9 @@ class GraphEncodingBuilder(IDPool):
                         vertexOrdering.append((i, j))
         for i, j in vertexOrdering:
             indicatorPairPresent.appendToInput(AndGate(self.id(), [allPrevGreaterEqual, self.var_edge(i, j), -matrixPermuted[i][j]]))
-            greaterEqual = OrGate(self.id(), [self.var_edge(i, j), -matrixPermuted[i][j]])  # , precEqual[i][j]])  # check whether i,j is greater equal
+            greaterEqual = OrGate(
+                self.id(), [self.var_edge(i, j), -matrixPermuted[i][j]]
+            )  # , precEqual[i][j]])  # check whether i,j is greater equal
             allPrevGreaterEqual = AndGate(self.id(), [allPrevGreaterEqual, greaterEqual])  # all previous equal and new either equal or an edge
 
         outputGate.appendToInput(indicatorPairPresent)
@@ -602,7 +636,7 @@ class GraphEncodingBuilder(IDPool):
         for u in self.V:
             outputGate.appendToInput(OrGate(self.id(), [self.var_edge(u, v) for v in self.V if v != u]))
 
-        E = list(combinations(self.V, 2)) # [(0,i) for i in self.V if i > 0] # 
+        E = list(combinations(self.V, 2))  # [(0,i) for i in self.V if i > 0] #
         # deleting edge
         for u, v in E:
             # only applicable if edge is present, so if not present just make empty graph
@@ -612,7 +646,9 @@ class GraphEncodingBuilder(IDPool):
                 if (i, j) == (u, v):
                     edgeTable[j][i] = edgeTable[i][j] = FalseGate
                 else:
-                    edgeTable[j][i] = edgeTable[i][j] = AndGate(self.id(), [self.var_edge(i, j), self.var_edge(u, v)])  # empty graph if the edge is not present
+                    edgeTable[j][i] = edgeTable[i][j] = AndGate(
+                        self.id(), [self.var_edge(i, j), self.var_edge(u, v)]
+                    )  # empty graph if the edge is not present
 
             def var_edge_adapted(i, j):
                 return edgeTable[i][j]
@@ -635,7 +671,9 @@ class GraphEncodingBuilder(IDPool):
                     adjacent = OrGate(self.id(), [self.var_edge(i, j), self.var_edge(i, v)])
                     edgeTable[j][i] = edgeTable[i][j] = AndGate(self.id(), [adjacent, self.var_edge(u, v)])
                 else:
-                    edgeTable[j][i] = edgeTable[i][j] = AndGate(self.id(), [self.var_edge(i, j), self.var_edge(u, v)])  # empty graph if the edge is not present
+                    edgeTable[j][i] = edgeTable[i][j] = AndGate(
+                        self.id(), [self.var_edge(i, j), self.var_edge(u, v)]
+                    )  # empty graph if the edge is not present
 
             def var_edge_adapted(i, j):
                 return edgeTable[i][j]
@@ -698,7 +736,9 @@ class GraphEncodingBuilder(IDPool):
         if version == 2:
             # second version: arc represent the smallest supergraph resulting from the elemination ordering.
             maxRounds = self.n - (t - 1)
-            arcs_lvl = [[[OrGate(self.id(), []) if u < v else None for v in self.V] for u in self.V] for _ in range(maxRounds)]  # graph at specific level
+            arcs_lvl = [
+                [[OrGate(self.id(), []) if u < v else None for v in self.V] for u in self.V] for _ in range(maxRounds)
+            ]  # graph at specific level
             arcs_lvl[0] = [[var_edge(u, v) if u < v else None for v in self.V] for u in self.V]  # first level are just the edges
             for r in range(1, maxRounds):
                 for u, v in combinations(self.V, 2):
@@ -707,7 +747,9 @@ class GraphEncodingBuilder(IDPool):
                         if w in [u, v]:
                             continue
                         # check whether w is a common neighbor in the previous graph
-                        predecessorAndCommonNeighbor = AndGate(self.id(), [ord(w, u), ord(w, v), arcs_lvl[r - 1][min(w, u)][max(w, u)], arcs_lvl[r - 1][min(w, v)][max(w, v)]])
+                        predecessorAndCommonNeighbor = AndGate(
+                            self.id(), [ord(w, u), ord(w, v), arcs_lvl[r - 1][min(w, u)][max(w, u)], arcs_lvl[r - 1][min(w, v)][max(w, v)]]
+                        )
                         arcs_lvl[r][u][v].appendToInput(predecessorAndCommonNeighbor)
 
             for u in self.V:
@@ -807,7 +849,9 @@ class GraphEncodingBuilder(IDPool):
         if args.kochen_specker:
             """Ensure that graph is not 010 colorable"""
             # universal part
-            triangleVars = {(u, v, w): AndGate(self.id(), [self.var_edge(u, v), self.var_edge(v, w), self.var_edge(u, w)]) for u, v, w in combinations(self.V, 3)}
+            triangleVars = {
+                (u, v, w): AndGate(self.id(), [self.var_edge(u, v), self.var_edge(v, w), self.var_edge(u, w)]) for u, v, w in combinations(self.V, 3)
+            }
 
             g = self.colorable010(triangleVars)
             g = NegatedGate(g)
@@ -939,15 +983,15 @@ class GraphEncodingBuilder(IDPool):
 
     # -------------------number of edges ------------------
 
-    def numEdgesUpp(self, m, countertype=DEFAULT_COUNTER):
+    def numEdgesUpp(self, m):
         """Upperbound on edges"""
-        g = self
-        g.counterFunction([g.var_edge(u, v) for u, v in combinations(g.V, 2)], m, atMost=m, counterType=countertype)
+        g = self.outputGate
+        seqCounter([g.var_edge(u, v) for u, v in combinations(self.V, 2)], m, self, g, atMost=m)
 
-    def numEdgesLow(self, m, countertype=DEFAULT_COUNTER):
+    def numEdgesLow(self, m):
         """Lowerbound on edges"""
-        g = self
-        g.counterFunction([g.var_edge(u, v) for u, v in combinations(g.V, 2)], m, atLeast=m, counterType=countertype)
+        g = self.outputGate
+        seqCounter([g.var_edge(u, v) for u, v in combinations(self.V, 2)], m, self, g, atLeast=m)
 
     def ckFree(self, k):
         """Forbid k-cycles (C_k) as subgraphs"""
@@ -957,7 +1001,9 @@ class GraphEncodingBuilder(IDPool):
                 continue
             if cycle[1] > cycle[-1]:
                 continue
-            outputGate.appendToInput(OrGate(self.id(), [-self.var_edge(cycle[i], cycle[(i + 1) % k]) for i in range(k)]))  # at least one edge absent from potential cycle
+            outputGate.appendToInput(
+                OrGate(self.id(), [-self.var_edge(cycle[i], cycle[(i + 1) % k]) for i in range(k)])
+            )  # at least one edge absent from potential cycle
         return outputGate
 
     def noSubsumingNeighboorhoods(self):
@@ -978,14 +1024,21 @@ class GraphEncodingBuilder(IDPool):
             outputGate.appendToInput(OrGate(self.id(), [-self.var_edge(u, v), -self.var_edge(v, w), -self.var_edge(u, w)]))
         for u, v in combinations(self.V, 2):
             # edge not present implies that the have a common neighbor
-            outputGate.appendToInput(OrGate(self.id(), [self.var_edge(u, v)] + [AndGate(self.id(), [self.var_edge(u, w), self.var_edge(v, w)]) for w in self.V if w not in [u, v]]))
+            outputGate.appendToInput(
+                OrGate(
+                    self.id(),
+                    [self.var_edge(u, v)] + [AndGate(self.id(), [self.var_edge(u, w), self.var_edge(v, w)]) for w in self.V if w not in [u, v]],
+                )
+            )
         return outputGate
 
     def greedyColoring(self):
         """Ensure that it can be colored by greedy coloring"""
 
         # Create variables indicating ordering of vertices
-        ordering = [[self.id() if u < v else None for v in self.V] for u in self.V]  # if true  then u < v else v < u, so automatically totally ordered
+        ordering = [
+            [self.id() if u < v else None for v in self.V] for u in self.V
+        ]  # if true  then u < v else v < u, so automatically totally ordered
         outputGate = AndGate(self.id(), [])
 
         def isSmaller(u, v):
@@ -1021,7 +1074,9 @@ class GraphEncodingBuilder(IDPool):
 
                 # if both edges present than not both have the same color
                 for c in C:
-                    outputGate.appendToInput(OrGate(self.id(), [-self.var_edge(u1, v1), -self.var_edge(u2, v2), -coloring[u1][v1][c], -coloring[u2][v2][c]]))
+                    outputGate.appendToInput(
+                        OrGate(self.id(), [-self.var_edge(u1, v1), -self.var_edge(u2, v2), -coloring[u1][v1][c], -coloring[u2][v2][c]])
+                    )
         return outputGate
 
     def cubic(self):
@@ -1055,8 +1110,14 @@ class GraphEncodingBuilder(IDPool):
         coloring = [[self.id() if u < v else None for v in self.V] for u in self.V]
         # no monochromatic triangle
         for u, v, w in combinations(self.V, 3):
-            outputGate.appendToInput(OrGate(self.id(), [-self.var_edge(u, v), -self.var_edge(u, w), -self.var_edge(v, w), -coloring[u][v], -coloring[v][w], -coloring[u][w]]))
-            outputGate.appendToInput(OrGate(self.id(), [-self.var_edge(u, v), -self.var_edge(u, w), -self.var_edge(v, w), coloring[u][v], coloring[v][w], coloring[u][w]]))
+            outputGate.appendToInput(
+                OrGate(
+                    self.id(), [-self.var_edge(u, v), -self.var_edge(u, w), -self.var_edge(v, w), -coloring[u][v], -coloring[v][w], -coloring[u][w]]
+                )
+            )
+            outputGate.appendToInput(
+                OrGate(self.id(), [-self.var_edge(u, v), -self.var_edge(u, w), -self.var_edge(v, w), coloring[u][v], coloring[v][w], coloring[u][w]])
+            )
         return outputGate
 
     def maxCliqueSize(self, k):
@@ -1083,7 +1144,11 @@ class GraphEncodingBuilder(IDPool):
                 if v == u:
                     continue
                 for w1, w2 in combinations(set(self.V) - {v, u}, 2):
-                    structureIsPresent.appendToInput(AndGate(self.id(), [self.var_edge(u, v), self.var_edge(u, w1), self.var_edge(u, w2), self.var_edge(v, w1), self.var_edge(v, w2)]))
+                    structureIsPresent.appendToInput(
+                        AndGate(
+                            self.id(), [self.var_edge(u, v), self.var_edge(u, w1), self.var_edge(u, w2), self.var_edge(v, w1), self.var_edge(v, w2)]
+                        )
+                    )
 
             outputGate.appendToInput(structureIsPresent)
 
@@ -1096,7 +1161,9 @@ class GraphEncodingBuilder(IDPool):
         for u, v in combinations(self.V, 2):
             checkGate = OrGate(self.id(), [self.var_edge(u, v)])
             for w1, w2 in combinations(set(self.V) - {u, v}, 2):
-                checkGate.appendToInput(AndGate(self.id(), [self.var_edge(x1, x2) for x1, x2 in combinations([u, v, w1, w2], 2) if (x1, x2) != (u, v)]))  # almost clique, so reason to not add edge
+                checkGate.appendToInput(
+                    AndGate(self.id(), [self.var_edge(x1, x2) for x1, x2 in combinations([u, v, w1, w2], 2) if (x1, x2) != (u, v)])
+                )  # almost clique, so reason to not add edge
             outputGate.appendToInput(checkGate)
         return outputGate
 
@@ -1130,7 +1197,9 @@ class GraphEncodingBuilder(IDPool):
         python_args_SMS = " ".join(f"--{param} {value}" for param, value in self.paramsSMS.items())
 
         sms_command = "time " if self.DEBUG else ""
-        sms_command += f"{program} {python_args_SMS} {args_SMS} --qcir-file {qcirFile}"  # TODO eventually parse args_SMS to allow to override deault arguments
+        sms_command += (
+            f"{program} {python_args_SMS} {args_SMS} --qcir-file {qcirFile}"  # TODO eventually parse args_SMS to allow to override deault arguments
+        )
         for arg in forwarding_args:
             sms_command += f" '{arg}'"
 
@@ -1159,7 +1228,14 @@ class GraphEncodingBuilder(IDPool):
         :param forwarding_args: Arguments to be forwarded to SMS
 
         """
-        self.solve(allGraphs=args.all_graphs, hideGraphs=args.hide_graphs, qcirFile=args.qcir_file, args_SMS=args.args_SMS, forwarding_args=forwarding_args, graph6_format=args.graph6_format)
+        self.solve(
+            allGraphs=args.all_graphs,
+            hideGraphs=args.hide_graphs,
+            qcirFile=args.qcir_file,
+            args_SMS=args.args_SMS,
+            forwarding_args=forwarding_args,
+            graph6_format=args.graph6_format,
+        )
 
 
 if __name__ == "__main__":

@@ -1,7 +1,9 @@
 site_name: SAT modulo Symmetries
+
 theme:
   name: readthedocs
   highlightjs: true
+
 plugins:
   - search
   - mkdocstrings:
@@ -10,6 +12,7 @@ plugins:
         python:
           options:
             docstring_style: sphinx
+
 markdown_extensions:
   - admonition
   - pymdownx.arithmatex:

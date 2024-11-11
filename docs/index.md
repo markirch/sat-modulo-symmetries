@@ -1,15 +1,15 @@
 # SAT Modulo Symmetries
 
 SAT Modulo Symmetries (SMS) is a framework and software package for isomorph-free generation and enumeration of graphs under constraints.
-Constraints for SMS can be specified declaratively, in propositional logic, and solved using specially adapted [SAT solvers](https://en.wikipedia.org/wiki/SAT_solver).
-Often, complex graph generation scenarios are easier to implement and faster solved with SMS than with other tools, thanks to the convenience of the input language and the sophistication of the SAT solver.
+Constraints for SMS can be specified declaratively, in propositional logic ([DIMACS](https://jix.github.io/varisat/manual/0.2.0/formats/dimacs.html)), and solved using specially adapted [SAT solvers](https://en.wikipedia.org/wiki/SAT_solver).
+With SMS, you can easily implement and solve complex graph constraints thanks to the combination of a flexible input language and a powerful SAT solver.
 
 
 SMS contains:
 
 - the enhanced solvers `smsg` and `smsd`, based on the award-winning SAT solver [CaDiCaL](https://github.com/arminbiere/cadical), which are the engine that generates undirected and directed graphs modulo isomorphisms;
-- the C++ libraries `libsms.a` and `libsmsdir.a`, which provide the same capabilities;
-- the Python library PySMS, which contains a collection of pre-defined constraints and an interface to start building your own graph generation scripts;
+- C++ SMS libraries (`libsms_static.a`, `libsmsdir_static.a`, `libsms.so`, `libsmsdir.so`);
+- the Python library `PySMS`, which contains a collection of pre-defined constraints and an interface to start building your own graph generation scripts;
 - a collection of examples and applications;
 - a 2QBF solver for modeling graphs with coNP properties. 
 
@@ -17,10 +17,11 @@ SMS contains:
 
 In order to build SMS, you will need the following:
 
-- the SAT solver [CaDiCaL](https://github.com/arminbiere/cadical) (supplied with SMS);
-- the [Boost](https://www.boost.org/) library including `libboost-program-options-dev` for parsing arguments;
+- the [Boost](https://www.boost.org/) library including `libboost-program-options-dev` for argument parsing;
 - [CMake](https://cmake.org); and
 - to install PySMS, [pip](https://pypi.org/project/pip).
+
+A copy of [CaDiCaL](https://github.com/arminbiere/cadical) is supplied with SMS.
 
 ## Install
 
@@ -52,7 +53,7 @@ The executables, static libraries, and required headers are automatically instal
 	An earlier version of this manual recommended to first build CaDiCaL. This step is now included in `build-and-install.sh` and **should not** be performed separately. If you build CaDiCaL separately, you need to make sure it is configured with `-fPIC`.
 
 `smsg` generates undirected graphs, `smsd` is for directed graphs.
-Likewise use `libsms.a` to generate undirected graphs, and `libsmsdir.a` for directed ones.
+Likewise use `libsms_static.a`, `libsms.so` to generate undirected graphs, and `libsmsdir_static.a`, `libsmsdir.so` for directed graphs.
 
 ## Overview
 
@@ -61,17 +62,18 @@ An example of such a task is to generate graphs with a certain maximum degree or
 
 SMS consists of two main parts:
 
-- the generation engine `smsg` (a compiled C++ binary) and its counterpart for directed graphs `smsd` (and the corresponding static libraries); and
+- the generation engine `smsg` (a compiled C++ binary) and its counterpart for directed graphs `smsd` (and the corresponding static and shared libraries); and
 - a Python module, PySMS, which comes with a library of pre-defined constraints, and an interface to implement custom new ones.
 
 The typical workflow with SMS likewise has two steps.
 The first is to generate the desired constraints and encode them in the [DIMACS](https://www.cs.utexas.edu/users/moore/acl2/manuals/current/manual/index-seo.php/SATLINK____DIMACS) format.
 This can be achieved using the module `pysms.graph_builder`, either selecting from the predefined constraints, or implementing custom ones.
 The second is to 'solve' the constraints using `smsg` or `smsd`.
-For convenience, the Python module has the capacity (turned on by default) to directly call `smsg` and solve the constraints it produces.
+For convenience, the Python module has the capacity (on by default) to directly call `smsg` and solve the constraints it produces.
 
-In principle, one may create DIMACS encodings in an arbitrary way and use SMS on them, but in order to make sure SMS will correctly recognize how the solutions of a formula represent graphs, it is important that Boolean variables that represent graph edges are correctly numbered (see below for the numbering scheme).
-This is best ensured by using the graph encoding-building interface provided by PySMS, and we strongly recommend to use it.
+!!! note
+    In order for SMS to correctly break symmetries, it is important that Boolean variables that represent graph edges are correctly numbered (see below for the numbering scheme).
+    This is best ensured by using the graph encoding-building interface provided by PySMS, and we strongly recommend to use it.
 
 On this page we focus on constraints expressible in propositional logic.
 More advanced features are covered in [advanced usage](advanced.md).
@@ -101,17 +103,17 @@ Below we provide a number of examples to illustrate the functionality.
 
 The most important options to `pysms.graph_builder` are as follows:
 
-- `--vertices n` : search for graph with `n` vertices;
-- `--all-graphs` : enumerate all graphs up to isomorphism (without this, the program terminates after finding the first graph that satisfies the constraints);
+- `-v|--vertices n` : search for a graph with `n` vertices;
+- `-a|--all-graphs` : enumerate all graphs up to isomorphism (without this, the program terminates after finding the first graph that satisfies the constraints);
 - `--no-solve` : don't solve, just output the constraints (possibly to save for a later solve);
-- `--directed` : generate directed graphs (default is undirected);
+- `->|--directed` : generate directed graphs (default is undirected);
 
 and some commonly required bounds:
 
-- `--num-edges-upp` : an upper bound on the number of edges;
-- `--num-edges-low` : a lower bound on the number of edges;
-- `--Delta-upp` : an upper bound on the maximum degree;
-- `--delta-low` : a lower bound on the minimum degree.
+- `-E|--num-edges-upp` : an upper bound on the number of edges;
+- `-e|--num-edges-low` : a lower bound on the number of edges;
+- `-D|--Delta-upp` : an upper bound on the maximum degree;
+- `-d|--delta-low` : a lower bound on the minimum degree.
 
 Any unrecognized arguments will be forwarded to `smsg`/`smsd` when in solving mode (and ignored with `--no-solve`), so any options that can be set for SMS can also be used through PySMS.
 
@@ -130,16 +132,19 @@ For all options available for `smsg` or `smsd`, run
 smsg --help
 ```
 
-SMS relies on a procedure called the _minimality check_ to filter out non-canonical isomorphic copies of graphs.
-This procedure is often fast, but has worst-case exponential running time.
-To avoid getting stuck in hard corner cases, we strongly recommend to use a time limit (cutoff) for the minimality check, by adding `--cutoff 20000`.
-This limits the number of recursive calls in the minimality check, but potentially results in incomplete symmetry breaking.
-The graphs can be filtered afterwards with tools like [Nauty](https://pallini.di.uniroma1.it/)'s `shortg`.
+!!! tip
+    SMS relies on a procedure called the _minimality check_ to filter out non-canonical isomorphic copies of graphs.
+    This procedure is often fast, but has worst-case exponential running time.
+    To avoid getting stuck in hard corner cases, we strongly recommend to use a time limit (cutoff) for the minimality check, by adding `--cutoff 20000`.
+    This limits the number of recursive calls in the minimality check, but potentially results in incomplete symmetry breaking.
+    The graphs can be filtered afterwards with tools like [Nauty](https://pallini.di.uniroma1.it/)'s `shortg`.
 
 
-### Using the Encoding Builder in Scripts
+### Custom Encodings
 
-In the first example, we will see how to create a simple script that uses the `GraphEncodingBuilder` class to create constraints which describe graphs with 7 vertices and maximum degree at most 3.
+Next, let us see how to create custom encoding scripts using PySMS.
+
+In the first example, we will create a simple script that uses the `GraphEncodingBuilder` class to create constraints which describe graphs with 7 vertices and maximum degree at most 3.
 
 ```python
 from pysms.graph_builder import GraphEncodingBuilder
@@ -149,10 +154,11 @@ builder.solve(allGraphs=True)
 ```
 
 The `builder` object contains the encoding and all necessary metadata such as the number of vertices and how to map edges to propositional variables. 
-The vertices are represented by the integers `0..n-1`.
+The vertices are represented by the integers \(0, 1, ..., n-1\).
 A clause can be added using `builder.append(clause)`.
 
-The second example shows how one can add custom constraints, in this case to enumerate all triangle-free graphs with 7 vertices.
+The example above uses only built-in constraints.
+The second example below shows how to add custom constraints, in this case to enumerate all *triangle-free* graphs with 7 vertices.
 
 ```python
 from pysms.graph_builder import GraphEncodingBuilder
@@ -163,7 +169,7 @@ for i,j,k in combinations(builder.V, 3):
 builder.solve(allGraphs=True)
 ```
 
-The function `builder.var_edge(i,j)` returns the Boolean variable associated with the edge {i,j}.
+The function `builder.var_edge(i,j)` returns the Boolean variable associated with the edge \(\{i,j\}\).
 So, `[-builder.var_edge(i,j), -builder.var_edge(i,k), -builder.var_edge(j,k)]` represents a clause (a disjunction) that ensures that at least one of the named pairs of vertices has no edge between them, or in other words that the vertex triple `i,j,k` doesn't form a triangle.
 
 !!! note
@@ -181,7 +187,10 @@ builder.ckFree(3)
 for i,j in combinations(builder.V, 2):
 	builder.append(
 		[-var_edge(i,j)] +\ # if i and j are non-neighbors, then
-		[builder.CNF_AND([builder.var_edge(i,k), builder.var_edge(j,k)]) for k in builder.V if k != i and k != j] # there should be a joint neighbor k
+		[
+            builder.CNF_AND([builder.var_edge(i,k), builder.var_edge(j,k)])
+            for k in builder.V if k != i and k != j
+        ] # there should be a joint neighbor k
 	)
 	
 builder.solve(allGraphs=True)

@@ -55,6 +55,8 @@ public:
   pair<int, int> rangeCubes; // solve all cubes between rangeCubes.fist and rangeCubes.second;
 
   int timeout = 0; // timeout in seconds (for each cube)
+  
+  string cadicalConfig = "";
 
   bool hyperedgeColoring = false; // also excludes intersection graph
 

@@ -281,6 +281,7 @@ int main(int argc, char const **argv)
           if (values.size() == 2)
               rangeCubesTemp = std::make_pair(values[0], values[1]); }),
               "Which cube should be solved (for external parallelization; see also --cubes)")
+      ("cadical-config", po::value<std::string>(&config.cadicalConfig), "Space-separated list of command-line options for cadical without the -- prefixes")
     ;
 
 

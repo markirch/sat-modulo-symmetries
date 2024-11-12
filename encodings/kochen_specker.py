@@ -29,19 +29,24 @@ class KSGraphEncodingBuilder(GraphEncodingBuilder):
 
     def eachEdgeInTriangle(self):
         g = self
-        for u,v in combinations(g.V,2):
-            g.append([-g.var_edge(u,v)] + [g.triangleVariables[(i, j, k)] for i, j, k in combinations(g.V, 3) if v in [i, j, k] and u in [i, j, k]])  # check that at least one triangle is present
+        for u, v in combinations(g.V, 2):
+            g.append([-g.var_edge(u, v)] + [g.triangleVariables[(i, j, k)] for i, j, k in combinations(g.V, 3) if v in [i, j, k] and u in [i, j, k]])  # check that at least one triangle is present
 
     def add_constraints_by_arguments(self, args):
         super().add_constraints_by_arguments(args)
         if args.edge_in_triangle:
             self.eachEdgeInTriangle()
 
+        if args.slim31:
+            import KS31
+            self.slimSingleStep(31, args.slim31, [(u - 1, v - 1) for u,v in KS31.KS31])
+
 
 if __name__ == "__main__":
     parser = getDefaultParser()
     parser.add_argument("--edge_in_triangle", action="store_true", help="Ensure that each edge is in a triangle")
-    args = parser.parse_args()
+    parser.add_argument("--slim31", type=int, help="Use SLIM to try to improve the 31 vertex KS graph; parameter gives the number of vertices removed from the 31 vertex graph")
+    args, forwarding_args = parser.parse_known_args()
     g = KSGraphEncodingBuilder(args.vertices, staticInitialPartition=args.static_partition)
     g.add_constraints_by_arguments(args)
-    g.solveArgs(args)
+    g.solveArgs(args, forwarding_args)

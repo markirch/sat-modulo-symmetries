@@ -13,7 +13,7 @@ class KSGraphEncodingBuilder(GraphEncodingBuilder):
 
         self.paramsSMS["triangle-vars"] = self.triangleVariables[(0, 1, 2)]
         self.paramsSMS["non010"] = ""
-        self.paramsSMS["frequency"] = 30
+        #self.paramsSMS["frequency"] = 30
         # self.paramsSMS["forbiddenSubgraphs"] = "./unembeddableSmall.txt"
 
         # ensure properties of KS graph

@@ -135,7 +135,7 @@ class GraphEncodingBuilder(IDPool, list):
         self.DEBUG = DEBUG
         self.varStaticInitialPartition = None
 
-        self.paramsSMS = {"vertices": self.n, "print-stats": True, "frequency": 30}  # default params
+        self.paramsSMS = {"vertices": self.n, "print-stats": True}  # default params
 
         # order in which variables are assigned is import !!!
         if directed:

@@ -6,7 +6,7 @@ find_package(Boost 1.74.0 REQUIRED COMPONENTS program_options graph)
 include_directories(${Boost_INCLUDE_DIRS})
 link_libraries(${Boost_LIBRARIES})
 
-set(sources "minimalityCheckCommon.cpp" "sms.cpp" "cadicalSMS.cpp" "useful.cpp" "connectedComponents.cpp" "coloring.cpp" "connectedChecker.cpp" "planarity.cpp" "coloringCheck.cpp" "graphUtilities.cpp" "decomposabilityCheck.cpp" "universal.cpp" "universal2.cpp" "qcirParser.cpp" "subgraphIsomorphism.cpp" "efx.cpp" "domination.cpp")
+set(sources "minimalityCheckCommon.cpp" "sms.cpp" "cadicalSMS.cpp" "useful.cpp" "connectedComponents.cpp" "coloring.cpp" "connectedChecker.cpp" "planarity.cpp" "coloringCheck.cpp" "universal.cpp" "universal2.cpp" "qcirParser.cpp" "subgraphIsomorphism.cpp" "efx.cpp" "domination.cpp")
 if(GLASGOW)
 	list(APPEND sources "forbiddenSubgraph.cpp")
 endif()

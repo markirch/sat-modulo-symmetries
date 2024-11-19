@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "sms-graph-builder"
-version = "2023.10"
+version = "2024.11"
 description = "A package for building propositional encodings of graphs. Contains several pre-defined encodings, as well as the ability to specify user-defined constraints."
 authors = [
 	{name = "Markus Kirchweger", email = "markus.kirchweger@ac.tuwien.ac.at"},

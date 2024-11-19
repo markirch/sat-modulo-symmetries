@@ -2,29 +2,34 @@ set(Boost_USE_STATIC_LIBS ON)
 
 # set(Boost_USE_MULTITHREADED ON)
 # set(Boost_USE_STATIC_RUNTIME OFF)
-find_package(Boost 1.74.0 REQUIRED COMPONENTS program_options)
+find_package(Boost 1.74.0 REQUIRED COMPONENTS program_options graph)
 include_directories(${Boost_INCLUDE_DIRS})
 link_libraries(${Boost_LIBRARIES})
 
-set(sources "minimalityCheckCommon.cpp" "sms.cpp" "cadicalSMS.cpp" "useful.cpp" "connectedComponents.cpp" "coloring.cpp" "connectedChecker.cpp" "planarity.cpp" "coloringCheck.cpp"  "universal.cpp" "universal2.cpp" "qcirParser.cpp" "subgraphIsomorphism" "efx.cpp" "domination.cpp")
+set(sources "minimalityCheckCommon.cpp" "sms.cpp" "cadicalSMS.cpp" "useful.cpp" "connectedComponents.cpp" "coloring.cpp" "connectedChecker.cpp" "planarity.cpp" "coloringCheck.cpp" "graphUtilities.cpp" "decomposabilityCheck.cpp" "universal.cpp" "universal2.cpp" "qcirParser.cpp" "subgraphIsomorphism.cpp" "efx.cpp" "domination.cpp")
 if(GLASGOW)
 	list(APPEND sources "forbiddenSubgraph.cpp")
 endif()
 
 set(clingo_wrapper "clingoSMS.cpp")
 set(glasgow_wrapper "glasgow_wrapper.cpp")
-# set(cadical_static_lib "${CMAKE_CURRENT_SOURCE_DIR}/../cadical-rel-1.7.4/build/libcadical.a")
+
 set(cadical_static_lib "${CMAKE_CURRENT_SOURCE_DIR}/../cadical/build/libcadical.a")
 link_libraries("${cadical_static_lib}")
 
 # -O3 not needed, because it is implied by CMAKE_BUILD_TYPE=Release (which is the default)
 set(CMAKE_CXX_FLAGS ${CMAKE_CXX_FLAGS} "-Wall -Wextra -pedantic")
 
-find_package(Clingo)
-if(Clingo_FOUND) # only build with clingo if the library is available
-	list(APPEND sources "${clingo_wrapper}")
-	add_compile_definitions(INCLUDE_CLINGO)
-	link_libraries(libclingo)
+if (DEFINED CLINGO)
+	find_package(Clingo)
+	if (Clingo_FOUND) # only build with Clingo if the library was explicitly requested and is available
+		list(APPEND sources "${clingo_wrapper}")
+		add_compile_definitions(INCLUDE_CLINGO)
+		link_libraries(libclingo)
+		message("Linking with Clingo")
+	else()
+		message("Could not find Clingo, continuing without it")
+	endif()
 endif()
 
 #set_property(GLOBAL PROPERTY RULE_LAUNCH_COMPILE "time")
@@ -48,7 +53,7 @@ target_link_libraries(smsd PRIVATE smsdir_static)
 install(TARGETS smsg smsd sms smsdir sms_static smsdir_static)
 install(FILES "${cadical_static_lib}" DESTINATION lib)
 install(FILES "sms.hpp" "cadical.hpp" "cadicalSMS.hpp" "useful.h" "graphChecker.hpp" "minimalityCheck.hpp" DESTINATION include/sms)
-if (Clinfo_FOUND)
+if (Clingo_FOUND)
 	install(FILES "clingoSMS.hpp" DESTINATION include/sms)
 endif()
 

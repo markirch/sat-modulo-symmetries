@@ -81,7 +81,7 @@ if [ $glasgow = 1 ]; then
 
 	msg "Building the Glasgow Subgraph Solver"
 	"$CMAKE_CMD" "-B$CMAKE_BUILD_DIR" -S.
-	if "$CMAKE_CMD" --build "-B$CMAKE_BUILD_DIR" -j2; then
+	if "$CMAKE_CMD" --build "$CMAKE_BUILD_DIR" -j2; then
 		msg "Glasgow solver built successfully"
 	else
 		msg "Unable to build the Glasgow solver, exiting"

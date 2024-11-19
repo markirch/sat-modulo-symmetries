@@ -10,7 +10,6 @@ import os
 from sys import *
 from ast import literal_eval
 import math
-import numpy as np
 
 
 def getDefaultParser():
@@ -1047,7 +1046,7 @@ class GraphEncodingBuilder(IDPool, list):
 
             # already assumes that not satisfied
             def simplifyClause(c):
-                return np.array([l for l in c if not propagatedValues[abs(l)]])
+                return [l for l in c if not propagatedValues[abs(l)]]
 
             # delete literals from clauses and delete satisfied clauses
             newClauses = [simplifyClause(c) for c in self if not isSatisfied(c)]

@@ -46,17 +46,6 @@ void CadicalSolver::init(SolverConfig config, cnf_t &cnf)
       }
     }
 
-    if (config.cadicalConfig != "") {
-      std::istringstream iss(config.cadicalConfig);
-      string param;
-      while (iss >> param) {
-        if (!solver->set_long_option(("--" + param).c_str())) {
-          std::cerr << "invalid Cadical option '" << param << "'" << std::endl;
-          EXIT_UNWANTED_STATE
-        }
-      }
-    }
-
     // register propagator first
     solver->connect_external_propagator(this);
 

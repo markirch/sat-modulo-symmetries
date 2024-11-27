@@ -2,7 +2,7 @@ set(Boost_USE_STATIC_LIBS ON)
 
 # set(Boost_USE_MULTITHREADED ON)
 # set(Boost_USE_STATIC_RUNTIME OFF)
-find_package(Boost 1.74.0 REQUIRED COMPONENTS program_options graph graph)
+find_package(Boost 1.74.0 REQUIRED COMPONENTS program_options graph)
 include_directories(${Boost_INCLUDE_DIRS})
 link_libraries(${Boost_LIBRARIES})
 

@@ -6,12 +6,14 @@ function msg() {
 
 usage () {
 cat <<EOF
-usage: build-and-install.sh [-h|--help][-g|--debug][-e|--expert]
+usage: build-and-install.sh [-h|--help][-g|--debug][-s|--glasgow][-l|--local][-c|--cmake][-p|--pip]
 
--h | --help    print this command line option summary
--g | --debug   compile in debug mode, with assertion checking and symbols
--s | --glasgow compile with the Glasgow subgraph solver
--l | --local   install locally for the current user (into \$HOME/.local/)
+-h | --help     print this command line option summary
+-g | --debug    compile in debug mode, with assertion checking and symbols
+-s | --glasgow  compile with the Glasgow subgraph solver
+-l | --local    install locally for the current user (into \$HOME/.local/)
+-c | --cmake   	use this cmake command (default: cmake)
+-p | --pip   	use this pip command (default: pip)
 EOF
 }
 
@@ -19,21 +21,28 @@ debug=0
 glasgow=0
 loc_inst=0
 
+CMAKE_CMD="cmake"
+CMAKE_BUILD_DIR="build"
+CMAKE_FLAGS="-B$CMAKE_BUILD_DIR -S."
+CONF_FLAGS="-fPIC"
+
+CADICAL_DIR="cadical/"
+
+PIP_CMD="pip"
+
 while [ $# -gt 0 ]
 do
   case $1 in
-    -h|--help) usage; exit 0;;
-    -g|--debug) debug=1;;
+    -h|--help)    usage; exit 0;;
+    -g|--debug)   debug=1;;
     -s|--glasgow) glasgow=1;;
-    -l|--local) loc_inst=1;;
+    -l|--local)   loc_inst=1;;
+    -c|--cmake)   if [ $# -eq 1 ]; then die "expecting cmake command after $1"; else shift; CMAKE_CMD="$1"; fi;;
+    -p|--pip)     if [ $# -eq 1 ]; then die "expecting pip command after $1"; else shift; PIP_CMD="$1"; fi;;
     *) die "invalid option '$1' (try '-h')";;
   esac
   shift
 done
-
-CMAKE_BUILD_DIR="build"
-CMAKE_FLAGS="-B$CMAKE_BUILD_DIR -S."
-CONF_FLAGS="-fPIC"
 
 if [ $debug = 1 ]; then
 	msg "Build type set to DEBUG"
@@ -47,9 +56,9 @@ if [ $loc_inst = 1 ]; then
 	CMAKE_FLAGS="$CMAKE_FLAGS -DCMAKE_INSTALL_PREFIX=$HOME/.local"
 fi
 
-if [ ! -f "cadical/build/libcadical.a" ]; then
+if [ ! -f "$CADICAL_DIR/build/libcadical.a" ]; then
 	msg "Building CaDiCaL"
-	cd cadical && ./configure $CONF_FLAGS && make -j2 && cd ..
+	cd "$CADICAL_DIR" && ./configure $CONF_FLAGS && make -j2 && cd ..
 fi
 
 if [ $glasgow = 1 ]; then
@@ -71,8 +80,8 @@ if [ $glasgow = 1 ]; then
 	#fi
 
 	msg "Building the Glasgow Subgraph Solver"
-	cmake -Bbuild -S.
-	if cmake --build build -j2; then
+	"$CMAKE_CMD" "-B$CMAKE_BUILD_DIR" -S.
+	if "$CMAKE_CMD" --build "$CMAKE_BUILD_DIR" -j2; then
 		msg "Glasgow solver built successfully"
 	else
 		msg "Unable to build the Glasgow solver, exiting"
@@ -91,11 +100,11 @@ else
 fi
 
 
-msg "Configuring the build directory..."
-cmake $CMAKE_FLAGS
+msg "Configuring SMS build directory..."
+"$CMAKE_CMD" $CMAKE_FLAGS
 
 msg "building SMS"
-if cmake --build "$CMAKE_BUILD_DIR" -j2; then
+if "$CMAKE_CMD" --build "$CMAKE_BUILD_DIR" -j2; then
 	msg "SMS built successfully"
 else
 	msg "Unable to build SMS, exiting"
@@ -104,11 +113,10 @@ fi
 
 msg "installing SMS binaries"
 if [ $loc_inst = 1 ]; then
-	cmake --install build
+	"$CMAKE_CMD" --install "$CMAKE_BUILD_DIR"
 else
-	sudo cmake --install build
+	sudo "$CMAKE_CMD" --install "$CMAKE_BUILD_DIR"
 fi
 
-msg "installing the Python wrapper"
-pip install .
-
+msg "installing PySMS"
+"$PIP_CMD" install .

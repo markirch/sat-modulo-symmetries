@@ -9,6 +9,10 @@ bool Internal::flip (int lit) {
   if (!active (lit) && !flags (lit).unused ())
     return false;
 
+
+  // TODO: Unused case is not handled yet.
+  // if (flags (lit).unused ()) return false;
+
   // Need to reestablish proper watching invariants as if there are no
   // blocking literals as flipping in principle does not work with them.
 
@@ -127,13 +131,23 @@ bool Internal::flip (int lit) {
 
     LOG ("flipping value of %d = 1 to %d = -1", lit, lit);
 
-    vals[idx] = -original_value;
-    vals[-idx] = original_value;
+    set_val (idx, -original_value);
     assert (val (-lit) > 0);
     assert (val (lit) < 0);
+
     Var &v = var (idx);
     assert (trail[v.trail] == lit);
     trail[v.trail] = -lit;
+    if (opts.ilb) {
+      if (!tainted_literal)
+        tainted_literal = lit;
+      else {
+        assert (val (tainted_literal));
+        if (v.level < var (tainted_literal).level) {
+          tainted_literal = lit;
+        }
+      }
+    }
   } else
     LOG ("flipping value of %d failed", lit);
 
@@ -146,6 +160,9 @@ bool Internal::flippable (int lit) {
 
   if (!active (lit) && !flags (lit).unused ())
     return false;
+
+  // TODO: Unused case is not handled yet
+  // if (flags (lit).unused ()) return false;
 
   // Need to reestablish proper watching invariants as if there are no
   // blocking literals as flipping in principle does not work with them.

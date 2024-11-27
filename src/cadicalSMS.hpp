@@ -7,20 +7,37 @@
 
 using std::deque;
 
-class CadicalSolver : public GraphSolver, public CaDiCaL::ExternalPropagator
+class TimeoutTerminator : public CaDiCaL::Terminator
+{
+private:
+    int timeout;
+    clock_t start_time;
+
+public:
+    TimeoutTerminator(int timeout) : timeout(timeout)
+    {
+        start_time = clock();
+    }
+
+    bool terminate() override
+    {
+        return (clock() - start_time) / CLOCKS_PER_SEC > timeout;
+    }
+};
+
+class CadicalSolver : public GraphSolver, public CaDiCaL::ExternalPropagator, public CaDiCaL::FixedAssignmentListener
 {
 private:
     bool redundant;
 
     bool changeInTrail = true; // checks whether the trail has changed since the last propagation step
 
-    int highestEdgeVariable;
-
-    vector<vector<int>> clauses;
-    int incrementalMode = false; // if true solver has finished and clauses are added by the normal "incremental interface", i.e., adding clauses without observed variables is possible
+    vector<pair<vector<int>, bool>> clauses; // all clauses which should be added. The second value indicates whether the clause is forgettable or not
+    int incrementalMode = false;             // if true solver has finished and clauses are added by the normal "incremental interface", i.e., adding clauses without observed variables is possible
 
     deque<vector<int>> current_trail; // for each decision lvl store the assigned literals (only positive version)
     vector<bool> isFixed;             // isFixed[v] is true if the truth value of this variable is fixed
+    vector<lit_t> fixedLiterals;
 
     vector<vector<int>> literal2clausePos; // for each edge variable store clause which was used the last time.
     vector<vector<int>> literal2clauseNeg; // for each negation of an edge variable
@@ -41,22 +58,98 @@ public:
     bool solve(vector<int> assumptions, int timeout);
     void printFullModel(void);
 
+    void setDefaultCubingArguments() {
+        // if (!solver->set("probeint", 1))
+        //     EXIT_UNWANTED_STATE
+
+        // if (!solver->set("chronoalways", 1))
+        //     EXIT_UNWANTED_STATE
+
+        // if (!solver->set("restart", 0))
+        //     EXIT_UNWANTED_STATE
+    };
+
+    /**
+     * Get the adjacency matrix at the decision level where the assignment cutoff was already fullfilled
+     */
+    bool getMinimalAdjacencyMatrixAssignmentCutoff()
+    {
+        vector<std::pair<int, int>> lit2edge;
+#ifndef DIRECTED
+        int numEdges = vertices * (vertices - 1) / 2;
+        for (int i = 0; i < vertices; i++)
+            for (int j = i + 1; j < vertices; j++)
+                lit2edge.push_back(std::make_pair(i, j));
+#else
+        int numEdges = vertices * vertices - vertices;
+        for (int i = 0; i < vertices; i++)
+            for (int j = 0; j < vertices; j++)
+            {
+                if (i == j)
+                    continue;
+                lit2edge.push_back(std::make_pair(i, j));
+            }
+#endif
+
+        auto matrix = getAdjacencyMatrix();
+
+        vector<lit_t> fixedEdgeLits;
+        for (auto lit : fixedLiterals)
+        {
+            if (abs(lit) > numEdges)
+                continue;
+            fixedEdgeLits.push_back(lit);
+        }
+
+        vector<lit_t> clause;
+        int level = 0;
+        for (auto lits : current_trail)
+        {
+            level++;
+            for (auto lit : lits)
+            {
+                if (lit > numEdges) // trail only saves the absolute literals
+                    continue;
+
+                auto edge = lit2edge[lit - 1];
+                if (matrix[edge.first][edge.second] == truth_value_true)
+                    clause.push_back(-lit);
+                else
+                    clause.push_back(lit);
+            }
+
+            // printf("Size of clause: %ld\n", clause.size());
+            if ((int) clause.size() + (int) fixedEdgeLits.size() >= config.assignmentCutoff) //  && current_trail.size() - level > 20) // avoid trivial cubes
+            {
+                addClause(clause, false);
+                printf("a");
+                for (auto lit : clause)
+                    printf(" %d", -lit);
+                for (auto lit : fixedEdgeLits)
+                    printf(" %d", -lit);
+                printf("\n");
+                return false;
+            }
+        }
+        return true;
+    }
+
     /* API function to return and internally block the next solution
      * the returned data has the following format:
-     *    
+     *
      *    // g = getNextGraph()
      *    *g is an int that holds the number of edges, m
      *    g[1]-g[2] ... g[2m-1]-g[2m] are the edges of the graph
      *
      * the data is stored in last_graph, and the returned pointer
      * points to its beginning
-     *   
+     *
      */
-    int* getNextGraph(vector<int> assumptions);
+    int *getNextGraph(vector<int> assumptions);
     vector<int> last_graph;
 
 public:
-    void addClause(const vector<lit_t> &clause, bool)
+    void addClause(const vector<lit_t> &clause, bool is_forgettable)
     {
 
         // if (sym_breaking_clause.size() != 0)
@@ -66,7 +159,9 @@ public:
         //     printf("%d ", lit);
         // printf("\n");
         if (!incrementalMode)
-            this->clauses.push_back(clause);
+        {
+            clauses.push_back(make_pair(clause, is_forgettable));
+        }
         else
         {
             if (config.addedClauses)
@@ -83,14 +178,26 @@ public:
     }
 
 public:
-    void notify_assignment(int lit, bool is_fixed)
+    void notify_fixed_assignment(int lit)
     {
-        changeInTrail = true;
-        int absLit = abs(lit);
-        currentAssignment[absLit] = lit > 0 ? truth_value_true : truth_value_false;
-        this->isFixed[absLit] = is_fixed;
-        if (!is_fixed)
+        // printf("Fixed assignment: %d\n", lit);
+        if (abs(lit) < isFixed.size())
+        {
+            this->isFixed[abs(lit)] = true;
+            fixedLiterals.push_back(lit);
+        }
+    }
+
+    void notify_assignment(const std::vector<int> &lits)
+    {
+        for (auto lit : lits)
+        {
+            changeInTrail = true;
+            int absLit = abs(lit);
+            currentAssignment[absLit] = lit > 0 ? truth_value_true : truth_value_false;
+            // this->isFixed[absLit] = is_fixed;
             current_trail.back().push_back(absLit);
+        }
     }
 
     void notify_new_decision_level()
@@ -155,7 +262,7 @@ public:
         return true;
     }
 
-    bool cb_has_external_clause()
+    bool cb_has_external_clause(bool &is_forgettable)
     {
         // PRINT_CURRENT_LINE
         // if no clause, then check whether a clause could be added. If already a clause present then just return clause.
@@ -167,14 +274,19 @@ public:
         }
 
         // printf("Check for external clause: %ld\n", sym_breaking_clause.size());
-        return !clauses.empty();
+        if (!clauses.empty())
+        {
+            is_forgettable = clauses.back().second;
+            return true;
+        }
+        return false;
     }
 
     int cb_add_external_clause_lit()
     {
         // PRINT_CURRENT_LINE
         // printf("Call: Add external clause\n");
-        vector<int> &lastClause = clauses[clauses.size() - 1];
+        vector<int> &lastClause = clauses.back().first;
         if (lastClause.empty())
         {
             clauses.pop_back(); // delete last clause
@@ -212,7 +324,7 @@ public:
         if (clauses.empty())
             return 0;
 
-        auto lastClause = clauses.back();
+        auto lastClause = clauses.back().first;
         assert(!lastClause.empty());
         // find unassigned literal otherwise take last one; first check if clause is unit
         int nUnknown = 0;
@@ -279,11 +391,12 @@ public:
     };
 };
 
-extern "C" {
-  int* next_solution(void* sms_solver);
-  void* create_solver(int vertices);
-  void destroy_solver(void* sms_solver);
-  void add_literal(void* sms_solver, int lit);
+extern "C"
+{
+    int *next_solution(void *sms_solver);
+    void *create_solver(int vertices);
+    void destroy_solver(void *sms_solver);
+    void add_literal(void *sms_solver, int lit);
 }
 
 #endif

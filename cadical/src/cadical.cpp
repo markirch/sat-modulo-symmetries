@@ -378,7 +378,7 @@ int App::main (int argc, char **argv) {
 #ifndef __MINGW32__
   const char *time_limit_specified = 0;
 #endif
-  bool witness = true, less = false;
+  bool witness = true, less = false, status = true;
   const char *dimacs_name, *err;
 
   for (int i = 1; i < argc; i++) {
@@ -449,6 +449,14 @@ int App::main (int argc, char **argv) {
              !strcmp (argv[i], "--witness=false") ||
              !strcmp (argv[i], "--witness=0"))
       witness = false;
+    else if (!strcmp (argv[i], "--status") ||
+             !strcmp (argv[i], "--status=true") ||
+             !strcmp (argv[i], "--status=1"))
+      status = true;
+    else if (!strcmp (argv[i], "-n") || !strcmp (argv[i], "--no-status") ||
+             !strcmp (argv[i], "--status=false") ||
+             !strcmp (argv[i], "--status=0"))
+      status = false;
     else if (!strcmp (argv[i], "--less")) { // EXPERIMENTAL!
       if (less)
         APPERR ("multiple '--less' options");
@@ -601,8 +609,8 @@ int App::main (int argc, char **argv) {
 #ifndef QUIET
   if (!get ("quiet")) {
     solver->section ("banner");
-    solver->message ("%sCaDiCaL Radically Simplified CDCL SAT Solver%s",
-                     tout.bright_magenta_code (), tout.normal_code ());
+    solver->message ("%sCaDiCaL SAT Solver%s", tout.bright_magenta_code (),
+                     tout.normal_code ());
     solver->message ("%s%s%s", tout.bright_magenta_code (), copyright (),
                      tout.normal_code ());
     solver->message ();
@@ -666,7 +674,7 @@ int App::main (int argc, char **argv) {
             "connected to terminal thus non-binary proof forced");
       solver->trace_proof (stdout, "<stdout>");
     } else if (!solver->trace_proof (proof_path))
-      APPERR ("can not open and write DRAT proof to '%s'", proof_path);
+      APPERR ("can not open and write proof trace to '%s'", proof_path);
     else
       solver->message ("writing %s proof trace to %s'%s'%s",
                        (get ("binary") ? "binary" : "non-binary"),
@@ -802,9 +810,11 @@ int App::main (int argc, char **argv) {
 #endif
         if (res == 10) {
           satisfiable++;
+          solver->conclude ();
           break;
         } else if (res == 20) {
           unsatisfiable++;
+          solver->conclude ();
           for (auto other : cube)
             if (solver->failed (other))
               failed.push_back (other);
@@ -840,8 +850,7 @@ int App::main (int argc, char **argv) {
 
   if (proof_specified) {
     solver->section ("closing proof");
-    solver->flush_proof_trace ();
-    solver->close_proof_trace ();
+    solver->close_proof_trace (!get ("quiet"));
   }
 
   if (output_path) {
@@ -875,12 +884,13 @@ int App::main (int argc, char **argv) {
   }
 
   if (res == 10) {
-    fputs ("s SATISFIABLE\n", write_result_file);
+    if (status)
+      fputs ("s SATISFIABLE\n", write_result_file);
     if (witness)
       print_witness (write_result_file);
-  } else if (res == 20)
+  } else if (res == 20 && status)
     fputs ("s UNSATISFIABLE\n", write_result_file);
-  else
+  else if (status)
     fputs ("c UNKNOWN\n", write_result_file);
   fflush (write_result_file);
   if (write_result_path)

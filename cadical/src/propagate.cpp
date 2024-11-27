@@ -56,19 +56,14 @@ inline int Internal::assignment_level (int lit, Clause *reason) {
 }
 
 // calculate lrat_chain
-// inlined because mostly called inside of propagate hjm TODO :/
-// TODO: not inlined because its used in vivify. Bad??
-// also TODO: to avoid if branch in propagate use this in learn unit clause
-// need to rember reason clause for that
 //
-void Internal::build_chain_for_units (int lit, Clause *reason) {
-  if (!opts.lrat || opts.lratexternal)
+void Internal::build_chain_for_units (int lit, Clause *reason,
+                                      bool forced) {
+  if (!lrat)
     return;
-  // LOG ("building chain for units");        bad line for debugging
-  // equivalence
-  if (opts.chrono && assignment_level (lit, reason))
+  if (opts.chrono && assignment_level (lit, reason) && !forced)
     return;
-  else if (!opts.chrono && level)
+  else if (!opts.chrono && level && !forced)
     return; // not decision level 0
   assert (lrat_chain.empty ());
   for (auto &reason_lit : *reason) {
@@ -85,11 +80,10 @@ void Internal::build_chain_for_units (int lit, Clause *reason) {
 }
 
 // same code as above but reason is assumed to be conflict and lit is not
-// needed also not inlined as it is not called inside of propagate.
-// TODO: not inlined because its used in vivify. Bad??
+// needed
 //
 void Internal::build_chain_for_empty () {
-  if (!opts.lrat || opts.lratexternal || !lrat_chain.empty ())
+  if (!lrat || !lrat_chain.empty ())
     return;
   assert (!level);
   assert (lrat_chain.empty ());
@@ -112,23 +106,14 @@ inline void Internal::search_assign (int lit, Clause *reason) {
     require_mode (SEARCH);
 
   const int idx = vidx (lit);
-  assert (!vals[idx]);
+  const bool from_external = reason == external_reason;
+  assert (!val (idx));
   assert (!flags (idx).eliminated () || reason == decision_reason ||
           reason == external_reason);
   Var &v = var (idx);
   int lit_level;
-  assert (!opts.lrat || opts.lratexternal || level ||
-          reason == external_reason || reason == decision_reason ||
-          !lrat_chain.empty ());
-  if (reason == external_reason &&
-      ((size_t) level <= assumptions.size () + (!!constraint.size ()))) {
-    // On the pseudo-decision levels every external propagation must be
-    // explained eagerly, in order to avoid complications during conflict
-    // analysis.
-    // TODO: refine this eager explanation step.
-    LOG ("Too low decision level to store external reason of: %d", lit);
-    reason = learn_external_reason_clause (lit);
-  }
+  assert (!lrat || level || reason == external_reason ||
+          reason == decision_reason || !lrat_chain.empty ());
   // The following cases are explained in the two comments above before
   // 'decision_reason' and 'assignment_level'.
   //
@@ -151,15 +136,18 @@ inline void Internal::search_assign (int lit, Clause *reason) {
     reason = 0;
 
   v.level = lit_level;
-  v.trail = (int) trail.size ();
+  v.trail = trail.size ();
   v.reason = reason;
-  if (!lit_level)
+  assert ((int) num_assigned < max_var);
+  assert (num_assigned == trail.size ());
+  num_assigned++;
+  if (!lit_level && !from_external)
     learn_unit_clause (lit); // increases 'stats.fixed'
+  assert (lit_level || !from_external);
   const signed char tmp = sign (lit);
-  vals[idx] = tmp;
-  vals[-idx] = -tmp;
-  assert (val (lit) > 0);
-  assert (val (-lit) < 0);
+  set_val (idx, tmp);
+  assert (val (lit) > 0);  // Just a bit paranoid but useful.
+  assert (val (-lit) < 0); // Ditto.
   if (!searching_lucky_phases)
     phases.saved[idx] = tmp; // phase saving during search
   trail.push_back (lit);
@@ -199,8 +187,7 @@ void Internal::assign_unit (int lit) {
 void Internal::search_assume_decision (int lit) {
   require_mode (SEARCH);
   assert (propagated == trail.size ());
-  level++;
-  control.push_back (Level (lit, trail.size ()));
+  new_trail_level (lit);
   notify_decision ();
   LOG ("search decide %d", lit);
   search_assign (lit, decision_reason);
@@ -270,6 +257,8 @@ bool Internal::propagate () {
 
       if (w.binary ()) {
 
+        // assert (w.clause->redundant || !w.clause->garbage);
+
         // In principle we can ignore garbage binary clauses too, but that
         // would require to dereference the clause pointer all the time with
         //
@@ -298,7 +287,7 @@ bool Internal::propagate () {
         if (b < 0)
           conflict = w.clause; // but continue ...
         else {
-          build_chain_for_units (w.blit, w.clause);
+          build_chain_for_units (w.blit, w.clause, 0);
           search_assign (w.blit, w.clause);
           // lrat_chain.clear (); done in search_assign
         }
@@ -397,7 +386,7 @@ bool Internal::propagate () {
             // The other watch is unassigned ('!u') and all other literals
             // assigned to false (still 'v < 0'), thus we found a unit.
             //
-            build_chain_for_units (other, w.clause);
+            build_chain_for_units (other, w.clause, 0);
             search_assign (other, w.clause);
             // lrat_chain.clear (); done in search_assign
 
@@ -528,6 +517,7 @@ void Internal::propergate () {
       const int other = lits[0] ^ lits[1] ^ lit;
       const signed char u = val (other);
 
+      // TODO: check if u == 0 can happen
       if (u > 0)
         continue;
       assert (u < 0);

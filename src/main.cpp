@@ -16,6 +16,7 @@ namespace po = boost::program_options;
 #include "coloring.h"
 #include "coloringCheck.hpp"
 
+#include "decomposabilityCheck.hpp"
 #include "forbiddenSubgraph.hpp"
 #include "connectedChecker.hpp"
 #include "universal.hpp"
@@ -35,6 +36,12 @@ int coloringAlgo; // 0 = simple, 1 = DPLL, 2 = SAT
 int independenceNumberUpperBound;
 int cliqueNumberUpperBound;
 int kConnected; // ensures that at least k connected i.e., deleting fewer than k vertices does not disconnect the graph
+
+bool non3Decomposable = false; //look for non 3-decomposable cubic graphs
+bool non3DecFullSearch = false; // fully search for non-separating circles in cubic graphs
+bool non3DecFullOff = false; // Turn off the full graph checker for non-3-decomposability
+int non3DecomposableFrequency = 30; // frequency for checking whether a partial graph is non-3-decomposable
+int non3DecHeuMaxIteration = 10; // maximum number of iterations done by the heuristic search for a 3-decomposition
 
 bool triangleVersion;
 int triangleVars = 0; // starting point of triangle variables if used
@@ -212,12 +219,18 @@ int main(int argc, char const **argv)
       ("vertex-orderings-file", po::value<std::string>(), "Specify the vertex orderings file")
       ("turn-off-inprocessing", po::bool_switch(&config.turnOffInprocessing), "Turn off Cadical's inprocessing")
       ("propagate-literals", po::bool_switch(&config.propagateLiteralsCadical), "Propagate literals")
-      ("irredundant-sym-clauses", po::bool_switch(&config.irredundantSymClauses), "Mark symmetry-breaking clauses as irredundant")
+      ("forgettable-clauses", po::bool_switch(&config.forgettableClauses), "Added clauses are forgettable")
       ("combine-static-dynamic", po::bool_switch(&config.combineStaticPlusDynamic), "Combine static with dynamic (SMS) symmetry breaking")
       ("planarity-frequency,planar", po::value<int>(&planarityFrequency), "The frequency with which to call the planarity check (0 means never)")
       ("thickness2", po::value<int>(&thickness2Frequency), "The frequency with which to test thickness two (0 means never)")
       ("thickness2multi", po::value<int>(&thickness2FrequencyMultigraph), "Frequency in which the second and third graph are tested for planarity")
       ("frequency-connected-components-swap,fc", po::value<int>(&config.frequencyConnectedComponentsSwap), "The frequency with which to call a special minimality check based on analysis of connected components")
+      
+      ("non-3-decomposable", po::bool_switch(&non3Decomposable), "Look for non 3-decomposable cubic graphs")
+      ("non-3-dec-turn-off-full", po::bool_switch(&non3DecFullOff), "Turn off the full graph checker for non-3-decomposability")
+      ("non-3-decomposable-full-search", po::bool_switch(&non3DecFullSearch), "Turn on full search for non-separating circles in cubic graphs")
+      ("non-3-decomposable-frequency", po::value<int>(&non3DecomposableFrequency), "Specify the frequency for checking whether a partial graph is non-3-decomposable")
+      ("non-3-decomposable-max-iteration", po::value<int>(&non3DecHeuMaxIteration), "Specify the maximum number of iterations done by the heuristic search for a 3-decomposition")
 
       // ("intervallsColoring", po::value<std::vector<int>>()->multitoken()->zero_tokens(), "Specify the intervals coloring"); // TODO
       ("coloring-algo", po::value<int>(&coloringAlgo), "Specify the graph coloring algorithm (0 means simple recursive; 1 means simple DPLL-based; 2 means SAT-based)")
@@ -281,6 +294,7 @@ int main(int argc, char const **argv)
           if (values.size() == 2)
               rangeCubesTemp = std::make_pair(values[0], values[1]); }),
               "Which cube should be solved (for external parallelization; see also --cubes)")
+      ("cadical-config", po::value<std::string>(&config.cadicalConfig), "Space-separated list of command-line options for cadical without the -- prefixes")
     ;
 
 
@@ -452,7 +466,6 @@ int main(int argc, char const **argv)
 #endif
 
     // TODO combineStaticPlusDynamic, triangleVersion or intersection graph are not compatable. Currently only one of them can be selected.
-
     if (config.combineStaticPlusDynamic)
     {
         config.staticPartition = vector<vector<lit_t>>(vertices, vector<lit_t>(vertices, 0));
@@ -464,9 +477,7 @@ int main(int argc, char const **argv)
             }
 
         if (useClingo)
-        {
             EXIT_UNWANTED_STATE; // currently only supported for CADICAL
-        }
 
         if (triangleVersion)
             EXIT_UNWANTED_STATE; // not compatable with triangle version
@@ -502,7 +513,6 @@ int main(int argc, char const **argv)
             cnf.push_back(clause);
         }
     }
-
     if (dimacsFile.is_open())
     {
         int maxVar;
@@ -519,7 +529,6 @@ int main(int argc, char const **argv)
     }
 
     // solving part-------------------------
-
     printf("Clauses: %ld, Variables %d\n", cnf.size(), config.nextFreeVariable - 1);
     fflush(stdout);
 
@@ -643,7 +652,6 @@ int main(int argc, char const **argv)
                 int num;
                 while (iss >> num)
                     forAllAsumptions.push_back(num);
-
                 // Now, the 'integers' vector contains all the integers from the first line
                 // for (int num : forAllAsumptions)
                 //     std::cout << num << " ";
@@ -687,6 +695,18 @@ int main(int argc, char const **argv)
     if (dominationNumInterfaces)
     {
         solver->addFullyDefinedGraphChecker(new QuasiKConnectedPropagator(dominationSizeOfInterface, dominationNumInterfaces));
+    }
+
+    if (non3Decomposable)
+    {
+        if (non3DecomposableFrequency > 0)
+        {
+            solver->addPartiallyDefinedGraphChecker(new SpanningTreeChecker(vertices, non3DecomposableFrequency));
+        }
+        if (!non3DecFullOff)
+        {
+            solver->addFullyDefinedGraphChecker(new ThreeDecomposabilityChecker(vertices, non3DecFullSearch, non3DecHeuMaxIteration));
+        }
     }
 
     solver->solve();

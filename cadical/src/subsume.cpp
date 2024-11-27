@@ -8,7 +8,7 @@ namespace CaDiCaL {
 // frequently during search.  It works both on original (irredundant)
 // clauses and on 'sticky' learned clauses which are likely to be kept.
 // This is abstracted away in the 'likely_to_be_kept_clause' function, which
-// implicitly relies on 'opts.reducetier1lgue' (glucose level of clauses
+// implicitly relies on 'opts.reducetier1glue' (glucose level of clauses
 // which are not reduced) as well as dynamically determined size and glucose
 // level ('lim.keptglue' and 'lim.keptsize') of clauses kept in 'reduce'.
 //
@@ -152,11 +152,15 @@ inline void Internal::subsume_clause (Clause *subsuming, Clause *subsumed) {
     stats.subred++;
   else
     stats.subirr++;
-  mark_garbage (subsumed);
-  if (subsumed->redundant || !subsuming->redundant)
+  if (subsumed->redundant || !subsuming->redundant) {
+    mark_garbage (subsumed);
     return;
+  }
   LOG ("turning redundant subsuming clause into irredundant clause");
   subsuming->redundant = false;
+  if (proof)
+    proof->strengthen (subsuming->id);
+  mark_garbage (subsumed);
   stats.current.irredundant++;
   stats.added.irredundant++;
   stats.irrlits += subsuming->size;
@@ -177,17 +181,13 @@ void Internal::strengthen_clause (Clause *c, int lit) {
   LOG (c, "removing %d in", lit);
   if (proof) {
     LOG (lrat_chain, "strengthening clause with chain");
-    if (opts.lrat && !opts.lratexternal)
-      proof->strengthen_clause (c, lit, lrat_chain);
-    else
-      proof->strengthen_clause (c, lit);
+    proof->strengthen_clause (c, lit, lrat_chain);
   }
   if (!c->redundant)
     mark_removed (lit);
   auto new_end = remove (c->begin (), c->end (), lit);
   assert (new_end + 1 == c->end ()), (void) new_end;
   (void) shrink_clause (c, c->size - 1);
-  c->used = true;
   LOG (c, "strengthened");
   external->check_shrunken_clause (c);
 }
@@ -208,8 +208,6 @@ inline int Internal::try_to_subsume_clause (Clause *c,
   LOG (c, "trying to subsume");
 
   mark (c); // signed!
-
-  Clause dummy; // Communicate binary subsuming clause.
 
   Clause *d = 0;
   int flipped = 0;
@@ -232,14 +230,15 @@ inline int Internal::try_to_subsume_clause (Clause *c,
       // array, which is way faster than storing clause pointers and
       // dereferencing them.  Since this binary clause array is also not
       // shrunken, we also can bail out earlier if subsumption or
-      // strengthening is determined.  In both cases the (self-)subsuming
-      // clause is stored in 'd', which makes it nonzero and forces
-      // aborting both the outer and inner loop.  If the binary clause can
-      // strengthen the candidate clause 'c' (through self-subsuming
-      // resolution), then 'filled' is set to the literal which can be
-      // removed in 'c', otherwise to 'INT_MIN' which is a non-valid
-      // literal.
-      //
+      // strengthening is determined.
+
+      // In both cases the (self-)subsuming clause is stored in 'd', which
+      // makes it nonzero and forces aborting both the outer and inner loop.
+      // If the binary clause can strengthen the candidate clause 'c'
+      // (through self-subsuming resolution), then 'filled' is set to the
+      // literal which can be removed in 'c', otherwise to 'INT_MIN' which
+      // is a non-valid literal.
+
       for (const auto &bin : bins (sign * lit)) {
         const auto &other = bin.lit;
         const int tmp = marked (other);
@@ -250,18 +249,24 @@ inline int Internal::try_to_subsume_clause (Clause *c,
         if (tmp < 0) {
           if (sign < 0)
             continue; // tautological resolvent
-          dummy.literals[0] = lit;
-          dummy.literals[1] = other;
+          dummy_binary->literals[0] = lit;
+          dummy_binary->literals[1] = other;
           flipped = other;
         } else {
-          dummy.literals[0] = sign * lit;
-          dummy.literals[1] = other;
+          dummy_binary->literals[0] = sign * lit;
+          dummy_binary->literals[1] = other;
           flipped = (sign < 0) ? -lit : INT_MIN;
         }
-        dummy.redundant = false;
-        dummy.size = 2;
-        dummy.id = bin.id;
-        d = &dummy;
+
+        // This dummy binary clauses is initialized in 'Internal::Internal'
+        // and only changes it literals in the lines above.   By using such
+        // a faked binary clause we can simply reuse 'subsume_clause' as
+        // well as the code around 'strengthen_clause' uniform for both real
+        // clauses and this special case for binary clauses
+
+        dummy_binary->id = bin.id;
+        d = dummy_binary;
+
         break;
       }
 
@@ -301,7 +306,7 @@ inline int Internal::try_to_subsume_clause (Clause *c,
 
   if (flipped) {
     LOG (d, "strengthening");
-    if (opts.lrat && !opts.lratexternal) {
+    if (lrat) {
       assert (lrat_chain.empty ());
       lrat_chain.push_back (c->id);
       lrat_chain.push_back (d->id);
@@ -651,6 +656,11 @@ void Internal::subsume (bool update_limits) {
     return;
   }
 
+  if (external_prop) {
+    assert(!level);
+    private_steps = true;
+  }
+
   if (opts.subsume) {
     reset_watches ();
     subsume_round ();
@@ -668,6 +678,11 @@ void Internal::subsume (bool update_limits) {
     vivify ();
   if (opts.transred)
     transred ();
+
+  if (external_prop) {
+    assert(!level);
+    private_steps = false;
+  }
 
 UPDATE_LIMITS:
 

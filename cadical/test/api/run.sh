@@ -105,13 +105,19 @@ run unit
 run morenmore
 run ctest
 run example
+run example_constraint
+run example_tracer
 run terminate
 run learn
 run cfreeze
 run traverse
 run cipasir
+run incproof
 
-[ "`grep DNTRACING $makefile`" = "" ] && run apitrace
+if [ "`grep DNTRACING $makefile`" = "" ]
+then
+  run apitrace
+fi
 
 #--------------------------------------------------------------------------#
 

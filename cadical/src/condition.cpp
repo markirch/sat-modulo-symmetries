@@ -80,16 +80,13 @@ bool Internal::conditioning () {
 void Internal::condition_unassign (int lit) {
   LOG ("condition unassign %d", lit);
   assert (val (lit) > 0);
-  vals[lit] = vals[-lit] = 0;
+  set_val (lit, 0);
 }
 
 void Internal::condition_assign (int lit) {
   LOG ("condition assign %d", lit);
   assert (!val (lit));
-  vals[lit] = 1;
-  vals[-lit] = -1;
-  assert (val (lit) > 0);
-  assert (val (-lit) < 0);
+  set_val (lit, 1);
 }
 
 /*------------------------------------------------------------------------*/
@@ -791,6 +788,8 @@ long Internal::condition_round (long delta) {
       for (const auto &lit : trail)
         if (is_autarky_literal (lit))
           external->push_witness_literal_on_extension_stack (lit);
+      if (proof)
+        proof->weaken_minus (c);
       external->push_clause_on_extension_stack (c);
 
       mark_garbage (c);

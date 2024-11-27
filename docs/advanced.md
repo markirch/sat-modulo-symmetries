@@ -53,14 +53,14 @@ SMS has the optional feature to generate graphs that do not contain any of a set
 To enable the feature, install and build with the [Glasgow Subgraph Solver](https://github.com/ciaranm/glasgow-subgraph-solver), by running `./build-and-install.sh -s`.
 
 The forbidden subgraphs are provided to `smsg` by a file. The file is given to the program by the argument `--forbidden-subgraphs FILE` (or `--forbidden-induced-subgraphs FILE`, the two can be used together), where the file contains a forbidden graph in each line.
-Each line describes a graph as follows: the line must contain an even number of space-separated positive integers, each consecutive pair describing one edge.
+Each line describes a graph as follows: the line must contain an odd number of space-separated positive integers; the first gives the number of vertices, and each consecutive pair describes one edge.
 
 ### Example for forbidden subgraphs
 
 ```plaintext
-0 1 1 2 0 2
-0 1 1 2 2 3 0 3
+3 0 1 1 2 0 2
+3 0 1 1 2 2 3 0 3
 ```
 
-Each consecutive pair of vertices form an edge, i.e., the first line represents the edges {0,1}, {1,2}, {0,2}. So, if we provide this file to the solver with `--forbidden-subgraphs`, only graphs without triangles and four-cycles will be generated.
+Each consecutive pair of vertices form an edge, i.e., the first line represents a graph with 3 vertices and the edges {0,1}, {1,2}, {0,2}. So, if we provide this file to the solver with `--forbidden-subgraphs`, only graphs without triangles and four-cycles will be generated.
 

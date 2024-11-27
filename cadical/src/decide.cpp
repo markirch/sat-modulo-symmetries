@@ -86,12 +86,24 @@ int Internal::likely_phase (int idx) { return decide_phase (idx, false); }
 
 /*------------------------------------------------------------------------*/
 
+// adds new level to control and trail
+//
+void Internal::new_trail_level (int lit) {
+  level++;
+  control.push_back (Level (lit, trail.size ()));
+}
+
+/*------------------------------------------------------------------------*/
+
 bool Internal::satisfied () {
-  size_t assigned = trail.size ();
-  if (propagated < assigned)
-    return false;
   if ((size_t) level < assumptions.size () + (!!constraint.size ()))
     return false;
+  if (num_assigned < (size_t) max_var)
+    return false;
+  assert (num_assigned == (size_t) max_var);
+  if (propagated < trail.size ())
+    return false;
+  size_t assigned = num_assigned;
   return (assigned == (size_t) max_var);
 }
 
@@ -120,8 +132,7 @@ int Internal::decide () {
       res = 20;
     } else if (tmp > 0) {
       LOG ("assumption %d already satisfied", lit);
-      level++;
-      control.push_back (Level (0, trail.size ()));
+      new_trail_level (0);
       LOG ("added pseudo decision level");
       notify_decision ();
     } else {
@@ -176,8 +187,7 @@ int Internal::decide () {
            "is implied by assumptions",
            satisfied_lit);
 
-      level++;
-      control.push_back (Level (0, trail.size ()));
+      new_trail_level (0);
       LOG ("added pseudo decision level for constraint");
       notify_decision ();
 
@@ -215,14 +225,24 @@ int Internal::decide () {
 #endif
 
   } else {
-    stats.decisions++;
+    
     int decision = ask_decision ();
-    if (!decision) {
-      int idx = next_decision_variable ();
-      const bool target = (opts.target > 1 || (stable && opts.target));
-      decision = decide_phase (idx, target);
+    if ((size_t) level < assumptions.size () ||
+      ((size_t) level == assumptions.size () && constraint.size ())) {
+        // forced backtrack below pseudo decision
+        // levels, one of the two branches above will handle it.
+        STOP (decide);
+        res = decide (); // STARTS and STOPS profiling
+        START (decide);
+    } else {
+      stats.decisions++;
+      if (!decision) {
+        int idx = next_decision_variable ();
+        const bool target = (opts.target > 1 || (stable && opts.target));
+        decision = decide_phase (idx, target);
+      }
+      search_assume_decision (decision);
     }
-    search_assume_decision (decision);
   }
   if (res)
     marked_failed = false;

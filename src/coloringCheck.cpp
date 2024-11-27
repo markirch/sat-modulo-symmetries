@@ -1,5 +1,6 @@
 #include <cassert>
 #include <numeric>
+#include "coloring.h"
 #include "coloringCheck.hpp"
 
 void SubgraphChromaticNumberChecker::checkProperty(const adjacency_matrix_t &matrix)

@@ -81,7 +81,7 @@ int Internal::second_literal_in_binary_clause_lrat (Clause *c, int first) {
 }
 
 // I needed to find the second clause for hyper unary resultion to build
-// lrat this is not efficient but I could not find a better way then just
+// LRAT this is not efficient but I could not find a better way then just
 // finding the corresponding clause in all possible clauses
 //
 Clause *Internal::find_binary_clause (int first, int second) {
@@ -128,7 +128,7 @@ void Internal::mark_binary_literals (Eliminator &eliminator, int first) {
       // had a bug where units could occur multiple times here
       // solved with flags
       LOG ("found binary resolved unit %d", first);
-      if (opts.lrat && !opts.lratexternal) {
+      if (lrat) {
         Clause *d = find_binary_clause (first, -second);
         assert (d);
         for (auto &lit : *d) {
@@ -230,7 +230,7 @@ void Internal::find_equivalence (Eliminator &eliminator, int pivot) {
       LOG ("found binary resolved unit %d", second);
       // did not find a bug where units could occur multiple times here
       // still solved potential issues with flags
-      if (opts.lrat && !opts.lratexternal) {
+      if (lrat) {
         Clause *d = find_binary_clause (pivot, second);
         assert (d);
         for (auto &lit : *d) {

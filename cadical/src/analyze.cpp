@@ -19,29 +19,24 @@ void Internal::learn_empty_clause () {
   external->check_learned_empty_clause ();
   int64_t id = ++clause_id;
   if (proof) {
-    if (opts.lrat && !opts.lratexternal) {
-      LOG (lrat_chain, "learned empty clause with proof chain: ");
-      proof->add_derived_empty_clause (id, lrat_chain);
-    } else
-      proof->add_derived_empty_clause (id);
+    proof->add_derived_empty_clause (id, lrat_chain);
   }
   unsat = true;
   conflict_id = id;
+  marked_failed = true;
+  conclusion.push_back (id);
   lrat_chain.clear ();
 }
 
 void Internal::learn_unit_clause (int lit) {
+  assert (!unsat);
   LOG ("learned unit clause %d", lit);
   external->check_learned_unit_clause (lit);
   int64_t id = ++clause_id;
   const unsigned uidx = vlit (lit);
   unit_clauses[uidx] = id;
   if (proof) {
-    if (opts.lrat && !opts.lratexternal) {
-      LOG (lrat_chain, "learned unit clause with proof chain: ");
-      proof->add_derived_unit_clause (id, lit, lrat_chain);
-    } else
-      proof->add_derived_unit_clause (id, lit);
+    proof->add_derived_unit_clause (id, lit, lrat_chain);
   }
   mark_fixed (lit);
 }
@@ -262,7 +257,7 @@ inline void Internal::analyze_literal (int lit, int &open,
   Flags &f = flags (lit);
 
   if (!v.level) {
-    if (f.seen || !opts.lrat || opts.lratexternal)
+    if (f.seen || !lrat)
       return;
     f.seen = true;
     unit_analyzed.push_back (lit);
@@ -303,7 +298,7 @@ inline void Internal::analyze_reason (int lit, Clause *reason, int &open,
   assert (reason);
   assert (reason != external_reason);
   bump_clause (reason);
-  if (opts.lrat && !opts.lratexternal)
+  if (lrat)
     lrat_chain.push_back (reason->id);
   for (const auto &other : *reason)
     if (other != lit)
@@ -368,6 +363,7 @@ inline void Internal::bump_also_all_reason_literals () {
   for (const auto &lit : clause)
     bump_also_reason_literals (-lit, opts.bumpreasondepth + stable);
 }
+
 /*------------------------------------------------------------------------*/
 
 void Internal::clear_unit_analyzed_literals () {
@@ -395,6 +391,14 @@ void Internal::clear_analyzed_literals () {
     assert (!f.removable);
   }
   analyzed.clear ();
+#ifndef NDEBUG
+  if (unit_analyzed.size ())
+    return;
+  for (auto idx : vars) {
+    Flags &f = flags (idx);
+    assert (!f.seen);
+  }
+#endif
 }
 
 void Internal::clear_analyzed_levels () {
@@ -474,6 +478,27 @@ Clause *Internal::new_driving_clause (const int glue, int &jump) {
 
   LOG ("jump level %d", jump);
 
+  return res;
+}
+
+/*------------------------------------------------------------------------*/
+
+// determine the OTFS level for OTFS. Unlike the find_conflict_level, we do
+// not have to fix the clause
+
+inline int Internal::otfs_find_backtrack_level (int &forced) {
+  assert (opts.otfs);
+  int res = 0;
+
+  for (const auto &lit : *conflict) {
+    const int tmp = var (lit).level;
+    if (tmp == level) {
+      forced = lit;
+    } else if (tmp > res) {
+      res = tmp;
+      LOG ("bt level is now %d due to %d", res, lit);
+    }
+  }
   return res;
 }
 
@@ -568,7 +593,7 @@ inline int Internal::determine_actual_backtrack_level (int jump) {
 
   assert (level > jump);
 
-  if (!opts.chrono && !external_prop) {
+  if (!opts.chrono) {
     res = jump;
     LOG ("chronological backtracking disabled using jump level %d", res);
   } else if (opts.chronoalways) {
@@ -589,7 +614,6 @@ inline int Internal::determine_actual_backtrack_level (int jump) {
          "thus backtracking chronologically to level %d",
          level - jump, opts.chronolevelim, res);
   } else if (opts.chronoreusetrail) {
-
     int best_idx = 0, best_pos = 0;
 
     if (use_scores ()) {
@@ -707,17 +731,9 @@ Clause *Internal::on_the_fly_strengthen (Clause *new_conflict, int uip) {
     sorted.push_back (other);
     if (var (other).level)
       lits[new_size++] = other;
-    /*
-    else if (other != uip && opts.lrat && !opts.lratexternal) {
-      assert (val (other) < 0);
-      const unsigned uidx = vlit (-other);
-      uint64_t id = unit_clauses[uidx];
-      mini_chain.push_back (id);
-    }
-    */
   }
 
-  LOG (new_conflict, "removing all units ");
+  LOG (new_conflict, "removing all units in");
 
   assert (lits[0] == uip || lits[1] == uip);
   const int other = lits[0] ^ lits[1] ^ uip;
@@ -729,9 +745,8 @@ Clause *Internal::on_the_fly_strengthen (Clause *new_conflict, int uip) {
     remove_watch (watches (other_init), new_conflict);
   remove_watch (watches (uip), new_conflict);
 
-  assert (!opts.lrat || opts.lratexternal ||
-          lrat_chain.back () == new_conflict->id);
-  if (opts.lrat && !opts.lratexternal) {
+  assert (!lrat || lrat_chain.back () == new_conflict->id);
+  if (lrat) {
     assert (!lrat_chain.empty ());
     for (const auto &id : unit_chain) {
       mini_chain.push_back (id);
@@ -780,8 +795,6 @@ Clause *Internal::on_the_fly_strengthen (Clause *new_conflict, int uip) {
   LOG (new_conflict, "strengthened clause by OTFS");
   sorted.clear ();
 
-  if (opts.lrat && !opts.lratexternal)
-    lrat_chain.push_back (new_conflict->id);
   return new_conflict;
 }
 
@@ -795,11 +808,15 @@ inline void Internal::otfs_subsume_clause (Clause *subsuming,
     stats.subred++;
   else
     stats.subirr++;
-  mark_garbage (subsumed);
-  if (subsumed->redundant || !subsuming->redundant)
+  if (subsumed->redundant || !subsuming->redundant) {
+    mark_garbage (subsumed);
     return;
+  }
   LOG ("turning redundant subsuming clause into irredundant clause");
   subsuming->redundant = false;
+  if (proof)
+    proof->strengthen (subsuming->id);
+  mark_garbage (subsumed);
   stats.current.irredundant++;
   stats.added.irredundant++;
   stats.irrlits += subsuming->size;
@@ -812,7 +829,7 @@ inline void Internal::otfs_subsume_clause (Clause *subsuming,
 
 /*------------------------------------------------------------------------*/
 
-// Candidate clause 'c' is strengthened by removing 'lit'.
+// Candidate clause 'c' is strengthened by removing 'lit' and units.
 //
 void Internal::otfs_strengthen_clause (Clause *c, int lit, int new_size,
                                        const std::vector<int> &old) {
@@ -820,11 +837,7 @@ void Internal::otfs_strengthen_clause (Clause *c, int lit, int new_size,
   assert (c->size > 2);
   (void) shrink_clause (c, new_size);
   if (proof) {
-    if (opts.lrat && !opts.lratexternal) {
-      LOG (mini_chain, "otfs with chain");
-      proof->otfs_strengthen_clause (c, old, mini_chain);
-    } else
-      proof->otfs_strengthen_clause (c, old);
+    proof->otfs_strengthen_clause (c, old, mini_chain);
   }
   if (!c->redundant) {
     mark_removed (lit);
@@ -852,16 +865,18 @@ void Internal::analyze () {
   assert (lrat_chain.empty ());
   assert (unit_chain.empty ());
   assert (unit_analyzed.empty ());
+  assert (clause.empty ());
 
   // First update moving averages of trail height at conflict.
   //
-  UPDATE_AVERAGE (averages.current.trail.fast, trail.size ());
-  UPDATE_AVERAGE (averages.current.trail.slow, trail.size ());
+  UPDATE_AVERAGE (averages.current.trail.fast, num_assigned);
+  UPDATE_AVERAGE (averages.current.trail.slow, num_assigned);
 
   /*----------------------------------------------------------------------*/
 
-  if (external_prop && !external_prop_is_lazy)
+  if (external_prop && !external_prop_is_lazy) {
     explain_external_propagations ();
+  }
 
   if (opts.chrono || external_prop) {
 
@@ -896,13 +911,12 @@ void Internal::analyze () {
       // level 0 this will not result in a valid chain).
       // we can just use build_chain_for_units in propagate
       //
-      build_chain_for_units (forced, conflict);
+      build_chain_for_units (forced, conflict, 0);
 
       LOG ("forcing %d", forced);
       search_assign_driving (forced, conflict);
 
       conflict = 0;
-      // lrat_chain.clear (); done in search_assign
       STOP (analyze);
       return;
     }
@@ -952,7 +966,8 @@ void Internal::analyze () {
   assert (clause.empty ());
   assert (lrat_chain.empty ());
 
-  int i = trail.size ();   // Start at end-of-trail.
+  const auto &t = &trail;
+  int i = t->size ();      // Start at end-of-trail.
   int open = 0;            // Seen but not processed on this level.
   int uip = 0;             // The first UIP literal.
   int resolvent_size = 0;  // without the uip
@@ -972,42 +987,59 @@ void Internal::analyze () {
     if (otfs && resolved > 0 && antecedent_size > 2 &&
         resolvent_size < antecedent_size) {
       assert (reason != conflict);
-      LOG (analyzed, "found candidate for OTFS, conflict is: ");
-      LOG (reason, "found candidate (size %d) for OTFS, resolvent is: ",
+      LOG (analyzed, "found candidate for OTFS conflict");
+      LOG (reason, "found candidate (size %d) for OTFS resolvent",
            antecedent_size);
       reason = on_the_fly_strengthen (reason, uip);
       assert (conflict_size >= 2);
+      if (opts.bump)
+        bump_variables ();
+
       if (resolved == 1 && resolvent_size < conflict_size) {
+        // in this case both clauses are part of the CNF, so one subsumes
+        // the other
         otfs_subsume_clause (reason, conflict);
-        resolved = 0;
         LOG (reason, "changing conflict to");
-        conflict = reason;
         --conflict_size;
-        assert (conflict_size == conflict->size);
+        assert (conflict_size == reason->size);
         ++stats.otfs.subsumed;
         ++stats.subsumed;
-
-        if (open == 1) {
-          int forced;
-          const int conflict_level = find_conflict_level (forced);
-          int new_level =
-              determine_actual_backtrack_level (conflict_level - 1);
-          UPDATE_AVERAGE (averages.current.level, new_level);
-          backtrack (new_level);
-
-          LOG ("forcing %d", forced);
-          search_assign_driving (forced, conflict);
-
-          conflict = 0;
-          // Clean up.
-          //
-          clear_analyzed_literals ();
-          clear_analyzed_levels ();
-          clause.clear ();
-          STOP (analyze);
-          return;
-        }
+        ++stats.conflicts;
       }
+
+      LOG (reason, "changing conflict to");
+      conflict = reason;
+      if (open == 1) {
+        int forced = 0;
+        const int conflict_level = otfs_find_backtrack_level (forced);
+        int new_level = determine_actual_backtrack_level (conflict_level);
+        UPDATE_AVERAGE (averages.current.level, new_level);
+        backtrack (new_level);
+
+        LOG ("forcing %d", forced);
+        search_assign_driving (forced, conflict);
+
+        conflict = 0;
+        // Clean up.
+        //
+        clear_analyzed_literals ();
+        clear_analyzed_levels ();
+        clause.clear ();
+        STOP (analyze);
+        return;
+      }
+
+      resolved = 0;
+      clear_analyzed_literals ();
+      // clear_analyzed_levels (); not needed because marking the exact same
+      // again
+      clause.clear ();
+      resolvent_size = 0;
+      antecedent_size = 1;
+      open = 0;
+      analyze_reason (0, reason, open, resolvent_size, antecedent_size);
+      conflict_size = antecedent_size - 1;
+      assert (open > 1);
     }
 
     ++resolved;
@@ -1015,7 +1047,7 @@ void Internal::analyze () {
     uip = 0;
     while (!uip) {
       assert (i > 0);
-      const int lit = trail[--i];
+      const int lit = (*t)[--i];
       if (!flags (lit).seen)
         continue;
       if (var (lit).level == level)
@@ -1080,7 +1112,7 @@ void Internal::analyze () {
   // reverse lrat_chain. We could probably work with reversed iterators
   // (views) to be more efficient but we would have to distinguish in proof
   //
-  if (opts.lrat && !opts.lratexternal) {
+  if (lrat) {
     LOG (unit_chain, "unit chain: ");
     for (auto id : unit_chain)
       lrat_chain.push_back (id);
@@ -1096,7 +1128,6 @@ void Internal::analyze () {
   UPDATE_AVERAGE (averages.current.jump, jump);
 
   int new_level = determine_actual_backtrack_level (jump);
-  ;
   UPDATE_AVERAGE (averages.current.level, new_level);
   backtrack (new_level);
 
@@ -1107,9 +1138,9 @@ void Internal::analyze () {
   // or we haven't actually learned a clause in new_driving_clause
   // then lrat_chain is still valid and we will learn a unit or empty clause
   //
-  if (uip)
+  if (uip) {
     search_assign_driving (-uip, driving_clause);
-  else
+  } else
     learn_empty_clause ();
 
   if (stable)

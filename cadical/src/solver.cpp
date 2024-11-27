@@ -37,7 +37,7 @@ namespace CaDiCaL {
          tout.normal_code ()); \
   } while (0)
 
-void Solver::transition_to_unknown_state () {
+void Solver::transition_to_steady_state () {
   if (state () == CONFIGURING) {
     LOG ("API leaves state %sCONFIGURING%s", tout.emph_code (),
          tout.normal_code ());
@@ -48,15 +48,17 @@ void Solver::transition_to_unknown_state () {
     LOG ("API leaves state %sSATISFIED%s", tout.emph_code (),
          tout.normal_code ());
     external->reset_assumptions ();
+    external->reset_concluded ();
     external->reset_constraint ();
   } else if (state () == UNSATISFIED) {
     LOG ("API leaves state %sUNSATISFIED%s", tout.emph_code (),
          tout.normal_code ());
     external->reset_assumptions ();
+    external->reset_concluded ();
     external->reset_constraint ();
   }
-  if (state () != UNKNOWN)
-    STATE (UNKNOWN);
+  if (state () != STEADY)
+    STATE (STEADY);
 }
 
 /*------------------------------------------------------------------------*/
@@ -311,6 +313,10 @@ static bool tracing_api_calls_through_environment_variable_method;
 #endif
 /*------------------------------------------------------------------------*/
 
+
+static bool tracing_nb_lidrup_env_var_method = false;
+
+
 Solver::Solver () {
 
 #ifndef NTRACING
@@ -345,6 +351,25 @@ Solver::Solver () {
   if (tracing_api_calls_through_environment_variable_method)
     message ("tracing API calls to '%s'", path);
 #endif
+
+  const char *lidrup_path = getenv ("CADICAL_LIDRUP_TRACE");
+  if (!lidrup_path)
+    lidrup_path = getenv ("CADICALLIDRUPTRACE");
+  if (lidrup_path) {
+
+    // if (tracing_nb_lidrup_env_var_method)
+    // FATAL ("can not trace LIDRUP of two solver instances "
+    //   "using environment variable 'CADICAL_LIDRUP_TRACE'");
+    // Here we use the solver interface to setup non-binary IDRUP tracing to
+    // the defined file. Options set by the user can and will overwrite
+    // these settings if neeed be.
+    set ("lidrup", 1);
+    set ("binary", 0);
+    trace_proof (lidrup_path);
+    tracing_nb_lidrup_env_var_method = true;
+  } else {
+    tracing_nb_lidrup_env_var_method = false;
+  }
 }
 
 Solver::~Solver () {
@@ -352,6 +377,8 @@ Solver::~Solver () {
   TRACE ("reset");
   REQUIRE_VALID_OR_SOLVING_STATE ();
   STATE (DELETING);
+
+  tracing_nb_lidrup_env_var_method = false;
 
 #ifdef LOGGING
   //
@@ -402,7 +429,7 @@ int Solver::vars () {
 void Solver::reserve (int min_max_var) {
   TRACE ("reserve", min_max_var);
   REQUIRE_VALID_STATE ();
-  transition_to_unknown_state ();
+  transition_to_steady_state ();
   external->reset_extended ();
   external->init (min_max_var);
   LOG_API_CALL_END ("reserve", min_max_var);
@@ -455,10 +482,6 @@ bool Solver::set (const char *arg, int val) {
         state () == CONFIGURING,
         "can only set option 'set (\"%s\", %d)' right after initialization",
         arg, val);
-  }
-  if (strcmp (arg, "lrat")) {
-    REQUIRE (!internal->external_prop,
-             "lrat is currently not compatible with external propagation");
   }
   bool res = internal->opts.set (arg, val);
   LOG_API_CALL_END ("set", arg, val, res);
@@ -534,28 +557,85 @@ void Solver::add (int lit) {
   REQUIRE_VALID_STATE ();
   if (lit)
     REQUIRE_VALID_LIT (lit);
-  transition_to_unknown_state ();
+  transition_to_steady_state ();
   external->add (lit);
   adding_clause = lit;
   if (adding_clause)
     STATE (ADDING);
   else if (!adding_constraint)
-    STATE (UNKNOWN);
+    STATE (STEADY);
   LOG_API_CALL_END ("add", lit);
 }
+
+void Solver::clause (int a) {
+  REQUIRE_VALID_LIT (a);
+  add (a), add (0);
+}
+
+void Solver::clause (int a, int b) {
+  REQUIRE_VALID_LIT (a);
+  REQUIRE_VALID_LIT (b);
+  add (a), add (b), add (0);
+}
+
+void Solver::clause (int a, int b, int c) {
+  REQUIRE_VALID_LIT (a);
+  REQUIRE_VALID_LIT (b);
+  REQUIRE_VALID_LIT (c);
+  add (a), add (b), add (c), add (0);
+}
+
+void Solver::clause (int a, int b, int c, int d) {
+  REQUIRE_VALID_LIT (a);
+  REQUIRE_VALID_LIT (b);
+  REQUIRE_VALID_LIT (c);
+  REQUIRE_VALID_LIT (d);
+  add (a), add (b), add (c), add (d), add (0);
+}
+
+void Solver::clause (int a, int b, int c, int d, int e) {
+  REQUIRE_VALID_LIT (a);
+  REQUIRE_VALID_LIT (b);
+  REQUIRE_VALID_LIT (c);
+  REQUIRE_VALID_LIT (d);
+  REQUIRE_VALID_LIT (e);
+  add (a), add (b), add (c), add (d), add (e), add (0);
+}
+
+void Solver::clause (const int *lits, size_t size) {
+  REQUIRE (!size || lits,
+           "first argument 'lits' zero while second argument 'size' not");
+  const int *end = lits + size;
+  for (const int *p = lits; p != end; p++) {
+    const int lit = *p;
+    REQUIRE_VALID_LIT (lit);
+    add (lit);
+  }
+  add (0);
+}
+
+void Solver::clause (const std::vector<int> &lits) {
+  for (auto lit : lits) {
+    REQUIRE_VALID_LIT (lit);
+    add (lit);
+  }
+  add (0);
+}
+
+bool Solver::inconsistent () { return internal->unsat; }
 
 void Solver::constrain (int lit) {
   TRACE ("constrain", lit);
   REQUIRE_VALID_STATE ();
   if (lit)
     REQUIRE_VALID_LIT (lit);
-  transition_to_unknown_state ();
+  transition_to_steady_state ();
   external->constrain (lit);
   adding_constraint = lit;
   if (adding_constraint)
     STATE (ADDING);
   else if (!adding_clause)
-    STATE (UNKNOWN);
+    STATE (STEADY);
   LOG_API_CALL_END ("constrain", lit);
 }
 
@@ -563,7 +643,7 @@ void Solver::assume (int lit) {
   TRACE ("assume", lit);
   REQUIRE_VALID_STATE ();
   REQUIRE_VALID_LIT (lit);
-  transition_to_unknown_state ();
+  transition_to_steady_state ();
   external->assume (lit);
   LOG_API_CALL_END ("assume", lit);
 }
@@ -591,23 +671,25 @@ Solver::CubesWithStatus Solver::generate_cubes (int depth, int min_depth) {
 void Solver::reset_assumptions () {
   TRACE ("reset_assumptions");
   REQUIRE_VALID_STATE ();
-  transition_to_unknown_state ();
+  transition_to_steady_state ();
   external->reset_assumptions ();
+  external->reset_concluded ();
   LOG_API_CALL_END ("reset_assumptions");
 }
 
 void Solver::reset_constraint () {
   TRACE ("reset_constraint");
   REQUIRE_VALID_STATE ();
-  transition_to_unknown_state ();
+  transition_to_steady_state ();
   external->reset_constraint ();
+  external->reset_concluded ();
   LOG_API_CALL_END ("reset_constraint");
 }
 
 /*------------------------------------------------------------------------*/
 
 int Solver::call_external_solve_and_check_results (bool preprocess_only) {
-  transition_to_unknown_state ();
+  transition_to_steady_state ();
   assert (state () & READY);
   STATE (SOLVING);
   const int res = external->solve (preprocess_only);
@@ -616,7 +698,7 @@ int Solver::call_external_solve_and_check_results (bool preprocess_only) {
   else if (res == 20)
     STATE (UNSATISFIED);
   else
-    STATE (UNKNOWN);
+    STATE (STEADY);
 #if 0 // EXPENSIVE ALTERNATIVE ASSUMPTION CHECKING
   // This checks that the set of failed assumptions form a core using the
   // external 'copy (...)' function to copy the solver, which can be trusted
@@ -627,8 +709,13 @@ int Solver::call_external_solve_and_check_results (bool preprocess_only) {
   //
   if (res == 20 && !external->assumptions.empty ()) {
     Solver checker;
+    // checking restored clauses does not work (because the clauses are not added)
+    checker.set("checkproof", 1);
+    checker.set("lratexternal", 0);
+    checker.set("lrat", 0);
     checker.prefix ("checker ");
     copy (checker);
+    checker.set("log", 1);
     for (const auto & lit : external->assumptions)
       if (failed (lit))
         checker.add (lit), checker.add (0);
@@ -636,8 +723,11 @@ int Solver::call_external_solve_and_check_results (bool preprocess_only) {
       FATAL ("copying assumption checker failed");
   }
 #endif
-  if (!res)
+  if (!res) {
     external->reset_assumptions ();
+    external->reset_constraint ();
+    external->reset_concluded ();
+  }
   return res;
 }
 
@@ -646,6 +736,7 @@ int Solver::solve () {
   REQUIRE_READY_STATE ();
   const int res = call_external_solve_and_check_results (false);
   LOG_API_CALL_RETURNS ("solve", res);
+  if (tracing_nb_lidrup_env_var_method) flush_proof_trace(true); 
   return res;
 }
 
@@ -669,6 +760,7 @@ int Solver::val (int lit) {
   REQUIRE (state () == SATISFIED, "can only get value in satisfied state");
   if (!external->extended)
     external->extend ();
+  external->conclude_sat ();
   int res = external->ival (lit);
   LOG_API_CALL_RETURNS ("val", lit, res);
   assert (state () == SATISFIED);
@@ -681,6 +773,8 @@ bool Solver::flip (int lit) {
   REQUIRE_VALID_STATE ();
   REQUIRE_VALID_LIT (lit);
   REQUIRE (state () == SATISFIED, "can only flip value in satisfied state");
+  REQUIRE (!external->propagator,
+           "can only flip when no external propagator is present");
   bool res = external->flip (lit);
   LOG_API_CALL_RETURNS ("flip", lit, res);
   assert (state () == SATISFIED);
@@ -692,6 +786,8 @@ bool Solver::flippable (int lit) {
   REQUIRE_VALID_STATE ();
   REQUIRE_VALID_LIT (lit);
   REQUIRE (state () == SATISFIED, "can only flip value in satisfied state");
+  REQUIRE (!external->propagator,
+           "can only flip when no external propagator is present");
   bool res = external->flippable (lit);
   LOG_API_CALL_RETURNS ("flippable", lit, res);
   assert (state () == SATISFIED);
@@ -813,16 +909,45 @@ void Solver::disconnect_learner () {
 
 /*===== IPASIR END =======================================================*/
 
+void Solver::connect_fixed_listener (FixedAssignmentListener *fixed_listener) {
+  LOG_API_CALL_BEGIN ("connect_fixed_listener");
+  REQUIRE_VALID_STATE ();
+  REQUIRE (fixed_listener, "can not connect zero fixed listener");
+
+#ifdef LOGGING
+  if (external->fixed_listener)
+    LOG ("connecting new listener of fixed assignments (disconnecting previous one)");
+  else
+    LOG ("connecting new listener of fixed assigments (no previous one)");
+#endif  
+  if (external->fixed_listener)
+    disconnect_fixed_listener ();
+  external->fixed_listener = fixed_listener;
+  // Listeners are treated as real-time listeners, thus previously found fixed
+  // assignments are not sent out (would be rather expensive to recover it
+  // retrospect, see external_propagate.cpp/get_fixed_literals () function).
+  LOG_API_CALL_END ("connect_fixed_listener");
+}
+
+void Solver::disconnect_fixed_listener () {
+  LOG_API_CALL_BEGIN ("disconnect_fixed_listener");
+  REQUIRE_VALID_STATE ();
+#ifdef LOGGING
+  if (external->fixed_listener)
+    LOG ("disconnecting previous listener of fixed assignments");
+  else
+    LOG ("ignoring to disconnect listener of fixed assignments (no previous one)");
+#endif
+  external->fixed_listener = 0;
+  LOG_API_CALL_END ("disconnect_fixed_listener");
+}
+
 /*===== IPASIR-UP BEGIN ==================================================*/
 
 void Solver::connect_external_propagator (ExternalPropagator *propagator) {
   LOG_API_CALL_BEGIN ("connect_external_propagator");
   REQUIRE_VALID_STATE ();
   REQUIRE (propagator, "can not connect zero propagator");
-  REQUIRE (!internal->opts.lrat,
-           "lrat is currently not compatible with external propagation");
-  // TODO: require opts.lrat = false
-
 #ifdef LOGGING
   if (external->propagator)
     LOG ("connecting new external propagator (disconnecting previous one)");
@@ -833,6 +958,7 @@ void Solver::connect_external_propagator (ExternalPropagator *propagator) {
     disconnect_external_propagator ();
 
   external->propagator = propagator;
+  internal->connect_propagator ();
   internal->external_prop = true;
   internal->external_prop_is_lazy = propagator->is_lazy;
   LOG_API_CALL_END ("connect_external_propagator");
@@ -852,6 +978,7 @@ void Solver::disconnect_external_propagator () {
     external->reset_observed_vars ();
 
   external->propagator = 0;
+  internal->set_tainted_literal ();
   internal->external_prop = false;
   internal->external_prop_is_lazy = true;
   LOG_API_CALL_END ("disconnect_external_propagator");
@@ -938,13 +1065,12 @@ bool Solver::frozen (int lit) const {
 /*------------------------------------------------------------------------*/
 
 bool Solver::trace_proof (FILE *external_file, const char *name) {
-  LOG_API_CALL_BEGIN ("trace_proof", name);
+  TRACE ("trace_proof", name);
   REQUIRE_VALID_STATE ();
   REQUIRE (
       state () == CONFIGURING,
       "can only start proof tracing to '%s' right after initialization",
       name);
-  REQUIRE (!internal->tracer, "already tracing proof");
   File *internal_file = File::write (internal, external_file, name);
   assert (internal_file);
   internal->trace (internal_file);
@@ -953,13 +1079,12 @@ bool Solver::trace_proof (FILE *external_file, const char *name) {
 }
 
 bool Solver::trace_proof (const char *path) {
-  LOG_API_CALL_BEGIN ("trace_proof", path);
+  TRACE ("trace_proof", path);
   REQUIRE_VALID_STATE ();
   REQUIRE (
       state () == CONFIGURING,
       "can only start proof tracing to '%s' right after initialization",
       path);
-  REQUIRE (!internal->tracer, "already tracing proof");
   File *internal_file = File::write (internal, path);
   bool res = (internal_file != 0);
   internal->trace (internal_file);
@@ -967,22 +1092,109 @@ bool Solver::trace_proof (const char *path) {
   return res;
 }
 
-void Solver::flush_proof_trace () {
-  LOG_API_CALL_BEGIN ("flush_proof_trace");
+void Solver::flush_proof_trace (bool print_statistics_unless_quiet) {
+  TRACE ("flush_proof_trace");
   REQUIRE_VALID_STATE ();
-  REQUIRE (internal->tracer, "proof is not traced");
-  REQUIRE (!internal->tracer->closed (), "proof trace already closed");
-  internal->flush_trace ();
+  REQUIRE (!internal->file_tracers.empty (), "proof is not traced");
+  REQUIRE (!internal->file_tracers.back ()->closed (),
+           "proof trace already closed");
+  internal->flush_trace (print_statistics_unless_quiet);
   LOG_API_CALL_END ("flush_proof_trace");
 }
 
-void Solver::close_proof_trace () {
-  LOG_API_CALL_BEGIN ("close_proof_trace");
+void Solver::close_proof_trace (bool print_statistics_unless_quiet) {
+  TRACE ("close_proof_trace");
   REQUIRE_VALID_STATE ();
-  REQUIRE (internal->tracer, "proof is not traced");
-  REQUIRE (!internal->tracer->closed (), "proof trace already closed");
-  internal->close_trace ();
+  REQUIRE (!internal->file_tracers.empty (), "proof is not traced");
+  REQUIRE (!internal->file_tracers.back ()->closed (),
+           "proof trace already closed");
+  internal->close_trace (print_statistics_unless_quiet);
   LOG_API_CALL_END ("close_proof_trace");
+}
+
+/*------------------------------------------------------------------------*/
+
+void Solver::connect_proof_tracer (Tracer *tracer, bool antecedents) {
+  LOG_API_CALL_BEGIN ("connect proof tracer");
+  REQUIRE_VALID_STATE ();
+  REQUIRE (state () == CONFIGURING,
+           "can only start proof tracing to right after initialization");
+  REQUIRE (tracer, "can not connect zero tracer");
+  internal->connect_proof_tracer (tracer, antecedents);
+  LOG_API_CALL_END ("connect proof tracer");
+}
+
+void Solver::connect_proof_tracer (InternalTracer *tracer,
+                                   bool antecedents) {
+  LOG_API_CALL_BEGIN ("connect proof tracer");
+  REQUIRE_VALID_STATE ();
+  REQUIRE (state () == CONFIGURING,
+           "can only start proof tracing to right after initialization");
+  REQUIRE (tracer, "can not connect zero tracer");
+  internal->connect_proof_tracer (tracer, antecedents);
+  LOG_API_CALL_END ("connect proof tracer");
+}
+
+void Solver::connect_proof_tracer (StatTracer *tracer, bool antecedents) {
+  LOG_API_CALL_BEGIN ("connect proof tracer with stats");
+  REQUIRE_VALID_STATE ();
+  REQUIRE (state () == CONFIGURING,
+           "can only start proof tracing to right after initialization");
+  REQUIRE (tracer, "can not connect zero tracer");
+  internal->connect_proof_tracer (tracer, antecedents);
+  LOG_API_CALL_END ("connect proof tracer with stats");
+}
+
+void Solver::connect_proof_tracer (FileTracer *tracer, bool antecedents) {
+  LOG_API_CALL_BEGIN ("connect proof tracer with file");
+  REQUIRE_VALID_STATE ();
+  REQUIRE (state () == CONFIGURING,
+           "can only start proof tracing right after initialization");
+  REQUIRE (tracer, "can not connect zero tracer");
+  internal->connect_proof_tracer (tracer, antecedents);
+  LOG_API_CALL_END ("connect proof tracer with file");
+}
+
+bool Solver::disconnect_proof_tracer (Tracer *tracer) {
+  LOG_API_CALL_BEGIN ("disconnect proof tracer");
+  REQUIRE_VALID_STATE ();
+  REQUIRE (tracer, "can not disconnect zero tracer");
+  bool res = internal->disconnect_proof_tracer (tracer);
+  LOG_API_CALL_RETURNS ("connect proof tracer", res);
+  return res;
+}
+
+bool Solver::disconnect_proof_tracer (StatTracer *tracer) {
+  LOG_API_CALL_BEGIN ("disconnect proof tracer");
+  REQUIRE_VALID_STATE ();
+  REQUIRE (tracer, "can not disconnect zero tracer");
+  bool res = internal->disconnect_proof_tracer (tracer);
+  LOG_API_CALL_RETURNS ("disconnect proof tracer", res);
+  return res;
+}
+
+bool Solver::disconnect_proof_tracer (FileTracer *tracer) {
+  LOG_API_CALL_BEGIN ("disconnect proof tracer");
+  REQUIRE_VALID_STATE ();
+  REQUIRE (tracer, "can not disconnect zero tracer");
+  bool res = internal->disconnect_proof_tracer (tracer);
+  LOG_API_CALL_RETURNS ("disconnect proof tracer", res);
+  return res;
+}
+
+/*------------------------------------------------------------------------*/
+
+void Solver::conclude () {
+  TRACE ("conclude");
+  REQUIRE_VALID_STATE ();
+  REQUIRE (state () == UNSATISFIED || state () == SATISFIED,
+           "can only conclude in satisfied or unsatisfied state");
+  if (state () == UNSATISFIED)
+    internal->conclude_unsat ();
+  else if (state () == SATISFIED)
+    external->conclude_sat ();
+  assert (state () == UNSATISFIED || state () == SATISFIED);
+  LOG_API_CALL_END ("conclude");
 }
 
 /*------------------------------------------------------------------------*/
@@ -1215,13 +1427,20 @@ bool Solver::is_decision (int lit) {
   return res;
 }
 
+void Solver::force_backtrack (size_t new_level) {
+  TRACE ("force_backtrack", new_level);
+  REQUIRE_VALID_OR_SOLVING_STATE ();
+  external->force_backtrack (new_level);
+}
+
 /*------------------------------------------------------------------------*/
 
 bool Solver::traverse_clauses (ClauseIterator &it) const {
   LOG_API_CALL_BEGIN ("traverse_clauses");
   REQUIRE_VALID_STATE ();
   bool res = external->traverse_all_frozen_units_as_clauses (it) &&
-             internal->traverse_clauses (it);
+             internal->traverse_clauses (it) &&
+             internal->traverse_constraint (it);
   LOG_API_CALL_RETURNS ("traverse_clauses", res);
   return res;
 }
@@ -1336,7 +1555,7 @@ struct WitnessWriter : public WitnessIterator {
     }
     return file->put ('0');
   }
-  bool witness (const vector<int> &c, const vector<int> &w) {
+  bool witness (const vector<int> &c, const vector<int> &w, uint64_t) {
     if (!write (c))
       return false;
     if (!file->put (' '))
@@ -1399,8 +1618,8 @@ struct WitnessCopier : public WitnessIterator {
 
 public:
   WitnessCopier (External *d) : dst (d) {}
-  bool witness (const vector<int> &c, const vector<int> &w) {
-    dst->push_external_clause_and_witness_on_extension_stack (c, w);
+  bool witness (const vector<int> &c, const vector<int> &w, uint64_t id) {
+    dst->push_external_clause_and_witness_on_extension_stack (c, w, id);
     return true;
   }
 };

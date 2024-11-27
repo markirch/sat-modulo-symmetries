@@ -7,6 +7,7 @@
 using std::pair;
 using std::make_pair;
 using std::min, std::max;
+//using std::cout, std::endl;
 
 vector<pair<int, int>> deleteVerticesWithDegree1(vector<pair<int, int>> &edges)
 {

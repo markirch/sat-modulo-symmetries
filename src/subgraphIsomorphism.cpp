@@ -187,7 +187,7 @@ void ForbiddenSubgraphChecker::checkProperty(const adjacency_matrix_t &matrix)
 
     // time precisely solver
     // clock_t start = clock();
-    int res = forbiddenSubgraphSolver.solve();
+    /*int res =*/ forbiddenSubgraphSolver.solve();
 
     printf("ERROR: ForbiddenSubgraphChecker using Cadical is not fully implemented yet\n");
     EXIT_UNWANTED_STATE // still work in progress
@@ -210,7 +210,7 @@ void ForbiddenSubgraphChecker::checkProperty(const adjacency_matrix_t &matrix)
     // printf("Ratio: %f\n", (double)totalSimpleTime / totalCadicalTime);
 }
 
-void ForbiddenSubgraphChecker::load_graphs(std::ifstream &graphs, bool induced)
+void ForbiddenSubgraphChecker::load_graphs(std::ifstream &graphs, bool /*induced*/)
 {
     string line;
     while (getline(graphs, line))

@@ -40,7 +40,7 @@ int simpleColoringAlg(const adjacency_matrix_t &adjacencyMatrix, int maxColors, 
 
 // TODO it seems like there was a problem with variable-length arrays, so for now let's do fixed-size
 // i.e. we can support up to 32 vertices and 8 colors (we can always increase these constants if necessary)
-//   this was in C, now we're in C++, so we could also use vectors...
+// this was in C, now we're in C++, so we could also use vectors...
 #define VMAX 78
 #define CMAX 16
 

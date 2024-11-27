@@ -7,10 +7,10 @@
 #ifndef NBUILD
 #if __GNUC__ > 4
 #if __has_include(<build.hpp>)
-#include <build.hpp>
+#include "build.hpp"
 #endif // __has_include
 #else
-#include <build.hpp>
+#include "build.hpp"
 #endif // __GNUC > 4
 #endif // NBUILD
 
@@ -24,7 +24,7 @@
 
 #ifdef NBUILD
 #ifndef VERSION
-#define VERSION "1.7.0"
+#define VERSION "2.1.0"
 #endif // VERSION
 #endif // NBUILD
 
@@ -33,7 +33,8 @@
 // The copyright of the code is here.
 
 static const char *COPYRIGHT =
-    "Copyright (c) 2016-2023 A. Biere, M. Fleury, N. Froleyks";
+    "Copyright (c) 2016-2024 A. Biere, M. Fleury, N. Froleyks, K. Fazekas, "
+    "F. Pollitt";
 
 /*------------------------------------------------------------------------*/
 
@@ -66,6 +67,12 @@ static const char *COPYRIGHT =
 #ifndef IDENTIFIER
 #define IDENTIFIER 0
 #endif
+#ifdef SHORTID
+#define SHORTIDSTR "-" SHORTID
+#else
+#define SHORTIDSTR ""
+#define SHORTID 0
+#endif
 
 // Compilation flags.
 //
@@ -87,7 +94,7 @@ namespace CaDiCaL {
 
 const char *version () { return VERSION; }
 const char *copyright () { return COPYRIGHT; }
-const char *signature () { return "cadical-" VERSION; }
+const char *signature () { return "cadical-" VERSION SHORTIDSTR; }
 const char *identifier () { return IDENTIFIER; }
 const char *compiler () { return COMPILER; }
 const char *date () { return DATE; }

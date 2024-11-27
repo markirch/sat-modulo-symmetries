@@ -192,17 +192,27 @@ vector<vector<truth_value_t>> GraphSolver::getStaticPartition()
   return partition;
 }
 
+// int cutoffCounts = 0;
+
 // returns false if a clause was added
 bool GraphSolver::cutoffFunction()
 {
-  if (config.assignmentCutoffPrerun && config.assignmentCutoffPrerun > stats.callsPropagator)
+  if (config.assignmentCutoffPrerun)
+  {
+    printf("Error: not supported\n");
+    EXIT_UNWANTED_STATE
+  }
+
+  if (inPrerunState)
     return true;
 
-  if (config.assignmentCutoffPrerunTime && config.assignmentCutoffPrerunTime > (clock() - stats.start) / CLOCKS_PER_SEC)
-    return true;
+  // cutoffCounts++;
+  // if (cutoffCounts < 1000)
+  //   return true;
+  // cutoffCounts = 0;
+  return getMinimalAdjacencyMatrixAssignmentCutoff();
 
-  config.assignmentCutoffPrerunTime = 0;
-  config.assignmentCutoffPrerun = 0;
+
   // frequency = 1; // check each time when creating cubes to add as much literals as possible
 
   adjacency_matrix_t matrix = getAdjacencyMatrix();
@@ -322,7 +332,7 @@ bool GraphSolver::cutoffFunction()
 #endif
 
   // printf("Size %ld\n", clause.size());
-  addClause(clause, false);
+  addClause(clause, config.forgettableClauses);
   return false;
 }
 
@@ -411,7 +421,7 @@ bool GraphSolver::checkPartiallyDefined(bool isFullyDefined)
   }
   catch (const forbidden_graph_t forbiddenGraph)
   {
-    addClause(theClauseThatBlocks(forbiddenGraph), false); // TODO eventually vector with checkers which are redundant and which are not; only makes sense when supported by Cadical
+    addClause(theClauseThatBlocks(forbiddenGraph), config.forgettableClauses); // TODO eventually vector with checkers which are redundant and which are not; only makes sense when supported by Cadical
     return false;
   }
 
@@ -424,7 +434,7 @@ bool GraphSolver::checkPartiallyDefined(bool isFullyDefined)
   catch (const vector<clause_t> clauses)
   {
     for (clause_t clause : clauses)
-      addClause(clause, false);
+      addClause(clause, config.forgettableClauses);
     return false;
   }
 
@@ -456,7 +466,7 @@ bool GraphSolver::checkPartiallyDefined(bool isFullyDefined)
       }
     }
 
-    addClause(clause, false); // TODO eventually vector with checkers which are redundant and which are not; only makes sense when supported by Cadical
+    addClause(clause, config.forgettableClauses); // TODO eventually vector with checkers which are redundant and which are not; only makes sense when supported by Cadical
     return false;
   }
 
@@ -473,7 +483,7 @@ bool GraphSolver::checkFullyDefinedGraph(const adjacency_matrix_t &matrix, const
   }
   catch (const forbidden_graph_t forbiddenGraph)
   {
-    addClause(theClauseThatBlocks(forbiddenGraph), false); // TODO eventually vector with checkers which are redundant and which are not; only makes sense when supported by Cadical
+    addClause(theClauseThatBlocks(forbiddenGraph), config.forgettableClauses); // TODO eventually vector with checkers which are redundant and which are not; only makes sense when supported by Cadical
     return false;
   }
 
@@ -486,7 +496,7 @@ bool GraphSolver::checkFullyDefinedGraph(const adjacency_matrix_t &matrix, const
   catch (const vector<clause_t> clauses)
   {
     for (clause_t clause : clauses)
-      addClause(clause, false);
+      addClause(clause, config.forgettableClauses);
     return false;
   }
 
@@ -655,7 +665,35 @@ bool GraphSolver::solve()
     fflush(stdout);
   }
 
-  // get a solve handle
+  initEdgeMemory();
+  if (config.non010colorable)
+    initTriangleMemory();
+
+  if (config.assignmentCutoffPrerunTime)
+  {
+    inPrerunState = true;
+    if (!config.cubeFile.empty())
+    {
+      printf("Prerun not supported for solving a cube\n");
+      exit(EXIT_FAILURE);
+    }
+    bool r = solve(config.assumptions, config.assignmentCutoffPrerunTime);
+    if (r)
+    {
+      printf("Already solved during prerun\n");
+      inPrerunState = false;
+      return true;
+    }
+    else
+    {
+      printf("Prerun finished\n");
+    }
+    inPrerunState = false;
+  }
+
+  if (config.assignmentCutoff)
+    setDefaultCubingArguments();
+
   int cubeCounter = 0;
   if (!config.cubeFile.empty())
   {
@@ -672,9 +710,6 @@ bool GraphSolver::solve()
           break;
       }
 
-      initEdgeMemory();
-      if (config.non010colorable)
-        initTriangleMemory();
       printf("Solve cube %d\n", cubeCounter);
       vector<lit_t> assumptions; // variable names from the initial encoding
 
@@ -710,9 +745,6 @@ bool GraphSolver::solve()
   }
   else
   {
-    initEdgeMemory();
-    if (config.non010colorable)
-      initTriangleMemory();
     if (config.timeout)
     {
       if (!solve(config.assumptions, config.timeout))

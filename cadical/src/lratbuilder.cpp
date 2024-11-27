@@ -50,7 +50,9 @@ inline LratBuilderWatcher &LratBuilder::watcher (int lit) {
 LratBuilderClause *LratBuilder::new_clause () {
   const size_t size = simplified.size ();
   assert (size <= UINT_MAX);
-  const size_t bytes = sizeof (LratBuilderClause) + (size) * sizeof (int);
+  const int off = size ? 1 : 0;
+  const size_t bytes =
+      sizeof (LratBuilderClause) + (size - off) * sizeof (int);
   LratBuilderClause *res = (LratBuilderClause *) new char[bytes];
   res->garbage = false;
   res->next = 0;
@@ -151,7 +153,7 @@ bool LratBuilder::clause_falsified (LratBuilderClause *c) {
 // lists until garbage collection (even though we remove garbage clauses on
 // the fly during propagation too).  We also remove satisfied clauses.
 //
-// Problem: this should only happen in drat not in lrat!! Done.
+// Problem: this should only happen in DRAT not in lrat!! Done.
 //
 void LratBuilder::collect_garbage_clauses () {
 
@@ -581,7 +583,7 @@ void LratBuilder::construct_chain () {
 }
 
 void LratBuilder::proof_tautological_clause () {
-  LOG (simplified, "LRAT BUILDER tautological clause needs no proof: ");
+  LOG (simplified, "LRAT BUILDER tautological clause needs no proof:");
 }
 
 void LratBuilder::proof_satisfied_literal (int lit) {
@@ -642,10 +644,10 @@ bool LratBuilder::build_chain_if_possible () {
   }
 
   reverse_chain.clear ();
-  for (auto b : justified)
-    b = false;
-  for (auto b : todo_justify)
-    b = false;
+  for (size_t i = 0; i < justified.size (); i++)
+    justified[i] = false;
+  for (size_t i = 0; i < todo_justify.size (); i++)
+    todo_justify[i] = false;
 
   if (inconsistent) {
     assert (inconsistent_clause);

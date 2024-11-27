@@ -15,8 +15,15 @@ extern "C" {
 #define __WIN32_WINNT 0x0600
 #endif
 
-#include <psapi.h>
+// Clang-format would reorder the includes which breaks the Windows code
+// as it expects 'windows.h' to be included first.  So disable it here.
+
+// clang-format off
+
 #include <windows.h>
+#include <psapi.h>
+
+// clang-format on
 
 #else
 
@@ -87,11 +94,11 @@ double absolute_process_time () {
 
 #endif
 
-double Internal::real_time () {
+double Internal::real_time () const {
   return absolute_real_time () - stats.time.real;
 }
 
-double Internal::process_time () {
+double Internal::process_time () const {
   return absolute_process_time () - stats.time.process;
 }
 

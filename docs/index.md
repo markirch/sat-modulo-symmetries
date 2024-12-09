@@ -1,7 +1,7 @@
 # SAT Modulo Symmetries
 
 SAT Modulo Symmetries (SMS) is a framework and software package for isomorph-free generation and enumeration of graphs under constraints.
-Constraints for SMS can be specified declaratively, in propositional logic ([DIMACS](https://jix.github.io/varisat/manual/0.2.0/formats/dimacs.html)), and solved using specially adapted [SAT solvers](https://en.wikipedia.org/wiki/SAT_solver).
+Constraints for SMS can be specified declaratively, in a combination of propositional logic ([DIMACS](https://jix.github.io/varisat/manual/0.2.0/formats/dimacs.html)) and [custom extensions](advanced), and solved using specially adapted [SAT solvers](https://en.wikipedia.org/wiki/SAT_solver).
 With SMS, you can easily implement and solve complex graph constraints thanks to the combination of a flexible input language and a powerful SAT solver.
 
 
@@ -17,8 +17,9 @@ SMS contains:
 
 In order to build SMS, you will need the following:
 
-- the [Boost](https://www.boost.org/) library including `libboost-program-options-dev` for argument parsing;
-- [CMake](https://cmake.org); and
+- a C++20-ready compiler;
+- [Boost](https://www.boost.org/) 1.74 or newer, including `libboost-program-options-dev`;
+- [CMake](https://cmake.org) 3.12 or newer; and
 - to install PySMS, [pip](https://pypi.org/project/pip).
 
 A copy of [CaDiCaL](https://github.com/arminbiere/cadical) is supplied with SMS.
@@ -54,6 +55,15 @@ The executables, static libraries, and required headers are automatically instal
 
 `smsg` generates undirected graphs, `smsd` is for directed graphs.
 Likewise use `libsms_static.a`, `libsms.so` to generate undirected graphs, and `libsmsdir_static.a`, `libsmsdir.so` for directed graphs.
+
+## Troubleshooting
+
+If the installation of PySMS fails, try updating pip with `python3 -m pip install --update pip`.
+
+You may see the `Illegal instruction` error when running SMS built with the Glasgow Subgraph Solver (see [advanced usage](http://localhost:8000/advanced/#forbidden-subgraphs)) on a different machine than where it was built.
+If this happens, comment out (with `#`) the lines in `glasgow-subgraph-solver/CMakeLists.txt` that talk about `-march=native`, delete `glasgow-subgraph-solver/build`, and re-run `./build-and-install.sh -s`.
+
+Please report any other issues [to us by email](team) or open an issue on [GitHub](https://github.com/markirch/sat-modulo-symmetries/issues).
 
 ## Overview
 
@@ -203,19 +213,17 @@ See [PySMS reference](reference.md) for the full list of builtin constraints and
 
 It is possible to use `smsg` and `smsd` directly, though for them to be useful, one typically needs a set of constraints.
 As mentioned earlier, it is strongly recommended to use PySMS to prepare the constraints, although it is perfectly reasonable to store generated constraints and solve them later, or on a different machine.
-One particularly useful case is when you want to parallelize the solving of a hard problem, in which case you will be calling the SMS solvers directly.
+One particularly useful case is when you want to parallelize the solving of a hard problem, in which case you will likely be calling the SMS solvers directly.
 
 The most important arguments of `smsg` and `smsd` are as follows:
 
-`smsg -v VERTICES [--all-graphs] [--frequency FREQUENCY] [--dimacs FILE] [--assignmentCutoff ACUTOFF] [--assignmentCutoffPrerunTime TIME] [--cutoff CUTOFF] [--printStats]`
-
 - `-v VERTICES` gives the number of vertices (order) of the graph;
-- `-b n m` searches for a bipartite graph with n+m vertices where the partitions are `0..n-1` and `n..n+m-1`;
-- `--all-graphs` to compute all graphs;
-- `--cutoff CUTOFF` gives the maximum total number of recursive calls in the minimality check, to avoid exponential behaviour. This can render symmetry breaking incomplete.
-- `--frequency FREQUENCY` used for balancing the time in the minimality check and the solver itself. For example if the frequency is 5 then the minimality check is only called every 5-th time (on average; whether to call it is decided by a random coin flip with a 1/FREQUENCY success rate);
+- `-b n m` searches for a bipartite graph with \(n+m\) vertices where the partitions are \(\{0, \dots, n-1\}\) and \(\{n, \dots, n+m-1\}\);
+- `--all-graphs` to compute all graphs (instead of stopping at the first solution, which is the default behaviour);
+- `--cutoff CUTOFF` limits the number of recursive calls in the minimality check, in order to avoid exponential behaviour. Setting this can render symmetry breaking incomplete.
+- `--frequency FREQUENCY` used for balancing the proportion of time spent in the minimality check and in the solver itself. For example if the frequency is 5 then the minimality check is only called every 5-th time (on average; whether to call it is decided by a random coin flip with a `1/FREQUENCY` success rate);
 - `--dimacs FILE` the file name providing the SAT encoding in DIMACS format.
-- `--print-stats` prints statistics of the run, especially the time spent in different propagators.
+- `--print-stats` prints statistics of the run at the end, especially the amount of time spent in various propagators.
 
 SMS has a native interface for the two-step parallelization technique called [cube-and-conquer](https://www.cs.utexas.edu/~marijn/publications/cube.pdf).
 In the first step the problem is split into a sequence of subproblems, each represented by a partial assignment (called a _cube_).

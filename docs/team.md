@@ -7,9 +7,9 @@ SAT modulo Symmetries was introduced by Kirchweger and Szeider ([link](https://p
 - Tomáš  Peitl, TU Wien
 - Manfred Scheucher, TU Berlin
 
-We also want to thank Katalin Fazekas for implementing an easy to use interface to Cadical allowing adding custom propagators. This allowed us to use Cadical as the underlying SAT solver. 
+We also want to thank Katalin Fazekas for implementing an easy-to-use interface to Cadical allowing adding custom propagators. This allowed us to use Cadical as the underlying SAT solver. 
 
 ## Contact
 
 If there are any questions, please don't hesitate to contact us:
- <markus.kirchweger@ac.tuwien.ac.at>.
+ <markus.kirchweger@ac.tuwien.ac.at>, <peitl@ac.tuwien.ac.at>

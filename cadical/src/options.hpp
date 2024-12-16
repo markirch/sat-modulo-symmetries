@@ -38,8 +38,7 @@ OPTION( checkassumptions,  1,  0,  1,0,0,0, "check assumptions satisfied") \
 OPTION( checkconstraint,   1,  0,  1,0,0,0, "check constraint satisfied") \
 OPTION( checkfailed,       1,  0,  1,0,0,0, "check failed literals form core") \
 OPTION( checkfrozen,       0,  0,  1,0,0,0, "check all frozen semantics") \
-OPTION( checkproof,        1,  0,  1,0,0,0, "check proof internally") \
-OPTION( checkprooflrat,    1,  0,  1,0,0,0, "use internal LRAT proof checker") \
+OPTION( checkproof,        3,  0,  3,0,0,0, "1=drat, 2=lrat, 3=both") \
 OPTION( checkwitness,      1,  0,  1,0,0,0, "check witness internally") \
 OPTION( chrono,            1,  0,  2,0,0,1, "chronological backtracking") \
 OPTION( chronoalways,      0,  0,  1,0,0,1, "force always chronological") \
@@ -93,20 +92,24 @@ OPTION( emalevel,        1e5,  1,2e9,0,0,1, "window back-track level") \
 OPTION( emasize,         1e5,  1,2e9,0,0,1, "window learned clause size") \
 OPTION( ematrailfast,    1e2,  1,2e9,0,0,1, "window fast trail") \
 OPTION( ematrailslow,    1e5,  1,2e9,0,0,1, "window slow trail") \
+OPTION( externallrat,      0,  0,  1,0,0,1, "external lrat") \
 OPTION( flush,             0,  0,  1,0,0,1, "flush redundant clauses") \
 OPTION( flushfactor,       3,  1,1e3,0,0,1, "interval increase") \
 OPTION( flushint,        1e5,  1,2e9,0,0,1, "initial limit") \
 OPTION( forcephase,        0,  0,  1,0,0,1, "always use initial phase") \
+OPTION( frat,              0,  0,  2,0,0,1, "1=frat(lrat), 2=frat(drat)") \
+OPTION( idrup,             0,  0,  1,0,0,1, "incremental proof format") \
+OPTION( ilb,               0,  0,  1,0,0,1, "ILB (incremental lazy backtrack)") \
+OPTION( ilbassumptions,    0,  0,  1,0,0,1, "trail reuse for assumptions (ILB-like)") \
 OPTION( inprocessing,      1,  0,  1,0,0,1, "enable inprocessing") \
 OPTION( instantiate,       0,  0,  1,0,1,1, "variable instantiation") \
 OPTION( instantiateclslim, 3,  2,2e9,0,0,1, "minimum clause size") \
 OPTION( instantiateocclim, 1,  1,2e9,2,0,1, "maximum occurrence limit") \
 OPTION( instantiateonce,   1,  0,  1,0,0,1, "instantiate each clause once") \
+OPTION( lidrup,            0,  0,  1,0,0,1, "linear incremental proof format") \
 LOGOPT( log,               0,  0,  1,0,0,0, "enable logging") \
 LOGOPT( logsort,           0,  0,  1,0,0,0, "sort logged clauses") \
-OPTION( lrat,              0,  0,  1,0,0,1, "use lrat proof format") \
-OPTION( lratexternal,      0,  0,  1,0,0,1, "external lrat") \
-OPTION( lratfrat,          0,  0,  1,0,0,1, "use frat proof format") \
+OPTION( lrat,              0,  0,  1,0,0,1, "use LRAT proof format") \
 OPTION( lucky,             1,  0,  1,0,0,1, "search for lucky phases") \
 OPTION( minimize,          1,  0,  1,0,0,1, "minimize learned clauses") \
 OPTION( minimizedepth,   1e3,  0,1e3,0,0,1, "minimization depth") \
@@ -121,7 +124,7 @@ OPTION( probereleff,      20,  1,1e5,1,0,1, "relative efficiency per mille") \
 OPTION( proberounds,       1,  1, 16,1,0,1, "probing rounds" ) \
 OPTION( profile,           2,  0,  4,0,0,0, "profiling level") \
 QUTOPT( quiet,             0,  0,  1,0,0,0, "disable all messages") \
-OPTION( radixsortlim,    800,  0,2e9,0,0,1, "radix sort limit") \
+OPTION( radixsortlim,     32,  0,2e9,0,0,1, "radix sort limit") \
 OPTION( realtime,          0,  0,  1,0,0,0, "real instead of process time") \
 OPTION( reduce,            1,  0,  1,0,0,1, "reduce useless clauses") \
 OPTION( reduceint,       300, 10,1e6,0,0,1, "reduce interval") \
@@ -145,7 +148,7 @@ OPTION( reverse,           0,  0,  1,0,0,1, "reverse variable ordering") \
 OPTION( score,             1,  0,  1,0,0,1, "use EVSIDS scores") \
 OPTION( scorefactor,     950,500,1e3,0,0,1, "score factor per mille") \
 OPTION( seed,              0,  0,2e9,0,0,1, "random seed") \
-OPTION( shrink,            3,  0,  3,0,0,1, "shrink conflict clause") \
+OPTION( shrink,            3,  0,  3,0,0,1, "shrink conflict clause (1=only with binary, 2=minimize when pulling, 3=full)") \
 OPTION( shrinkreap,        1,  0,  1,0,0,1, "use a reap for shrinking") \
 OPTION( shuffle,           0,  0,  1,0,0,1, "shuffle variables") \
 OPTION( shufflequeue,      1,  0,  1,0,0,1, "shuffle variable queue") \
@@ -156,7 +159,7 @@ OPTION( stabilizefactor, 200,101,2e9,0,0,1, "phase increase in percent") \
 OPTION( stabilizeint,    1e3,  1,2e9,0,0,1, "stabilizing interval") \
 OPTION( stabilizemaxint, 2e9,  1,2e9,0,0,1, "maximum stabilizing phase") \
 OPTION( stabilizeonly,     0,  0,  1,0,0,1, "only stabilizing phases") \
-OPTION( stats,             1,  0,  1,0,0,1, "print all statistics at the end of the run") \
+OPTION( stats,             0,  0,  1,0,0,1, "print all statistics at the end of the run") \
 OPTION( subsume,           1,  0,  1,0,1,1, "enable clause subsumption") \
 OPTION( subsumebinlim,   1e4,  0,2e9,1,0,1, "watch list length limit") \
 OPTION( subsumeclslim,   1e2,  0,2e9,2,0,1, "clause length limit") \
@@ -181,6 +184,7 @@ OPTION( transredmaxeff,  1e8,  0,2e9,1,0,1, "maximum efficiency") \
 OPTION( transredmineff,  1e6,  0,2e9,1,0,1, "minimum efficiency") \
 OPTION( transredreleff,  1e2,  1,1e5,1,0,1, "relative efficiency per mille") \
 QUTOPT( verbose,           0,  0,  3,0,0,0, "more verbose messages") \
+OPTION( veripb,            0,  0,  4,0,0,1, "odd=checkdeletions, > 2=drat") \
 OPTION( vivify,            1,  0,  1,0,1,1, "vivification") \
 OPTION( vivifyinst,        1,  0,  1,0,0,1, "instantiate last literal when vivify") \
 OPTION( vivifymaxeff,    2e7,  0,2e9,1,0,1, "maximum efficiency") \

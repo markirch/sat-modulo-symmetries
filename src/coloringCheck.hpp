@@ -1,8 +1,7 @@
 #ifndef COLORING_CHECKER_H
-#define COLORING_CHECHER_H
+#define COLORING_CHECKER_H
 
 #include "graphChecker.hpp"
-#include "coloring.h"
 #include "useful.h"
 
 /**
@@ -94,8 +93,8 @@ public:
 
 class Non010colorableChecker : public ComplexFullyDefinedGraphChecker
 {
-    vector<vector<vector<int>>> triangleVars; // the variables indicating whether certain triangles are present.
-    vector<vector<int>> edges;
+    vector<vector<vector<int>>>& triangleVars; // the variables indicating whether certain triangles are present.
+    vector<vector<int>>& edges;
     bool allColorings = false;
     bool permuteColorings = false;
 
@@ -103,13 +102,13 @@ class Non010colorableChecker : public ComplexFullyDefinedGraphChecker
     vector<vector<int>> *edge_stats;
 
 public:
-    Non010colorableChecker(vector<vector<vector<int>>> triangleVars, vector<vector<int>> edges, vector<vector<vector<int>>> *triangle_stats, vector<vector<int>> *edge_stats)
+    Non010colorableChecker(vector<vector<vector<int>>> &triangleVars, vector<vector<int>> &edges, vector<vector<vector<int>>> *triangle_stats, vector<vector<int>> *edge_stats) :
+      triangleVars (triangleVars),
+      edges (edges)
     {
         this->triangle_stats = triangle_stats;
         this->edge_stats = edge_stats;
         this->name = "Non010colorableChecker";
-        this->triangleVars = triangleVars;
-        this->edges = edges;
         addsOnlyObservedLiterals = false;
     }
     void checkProperty(const adjacency_matrix_t &matrix, const vector<int> &, int &);

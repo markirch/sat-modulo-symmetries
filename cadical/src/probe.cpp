@@ -52,7 +52,7 @@ inline void Internal::set_parent_reason_literal (int lit, int reason) {
 // call locally after failed_literal or backtracking
 //
 void Internal::clean_probehbr_lrat () {
-  if (!opts.lrat || opts.lratexternal || opts.probehbr)
+  if (!lrat || opts.probehbr)
     return;
   for (auto &field : probehbr_chains) {
     for (auto &chain : field) {
@@ -64,7 +64,7 @@ void Internal::clean_probehbr_lrat () {
 // call globally before a probe round (or a lookahead round)
 //
 void Internal::init_probehbr_lrat () {
-  if (!opts.lrat || opts.lratexternal || opts.probehbr)
+  if (!lrat || opts.probehbr)
     return;
   const size_t size = 2 * (1 + (size_t) max_var);
   probehbr_chains.resize (size);
@@ -84,7 +84,7 @@ void Internal::init_probehbr_lrat () {
 // this leads to conflict with unit reason uip
 //
 void Internal::get_probehbr_lrat (int lit, int uip) {
-  if (!opts.lrat || opts.lratexternal || opts.probehbr)
+  if (!lrat || opts.probehbr)
     return;
   assert (lit);
   assert (lrat_chain.empty ());
@@ -97,7 +97,7 @@ void Internal::get_probehbr_lrat (int lit, int uip) {
 // lrat_chain. also clears lrat_chain.
 //
 void Internal::set_probehbr_lrat (int lit, int uip) {
-  if (!opts.lrat || opts.lratexternal || opts.probehbr)
+  if (!lrat || opts.probehbr)
     return;
   assert (lit);
   assert (lrat_chain.size ());
@@ -110,9 +110,9 @@ void Internal::set_probehbr_lrat (int lit, int uip) {
 // use mini_chain because it needs to be reversed
 //
 void Internal::probe_dominator_lrat (int dom, Clause *reason) {
-  if (!opts.lrat || opts.lratexternal || !dom)
+  if (!lrat || !dom)
     return;
-  LOG (reason, "probe dominator lrat for %d from", dom);
+  LOG (reason, "probe dominator LRAT for %d from", dom);
   for (const auto lit : *reason) {
     if (val (lit) >= 0)
       continue;
@@ -257,7 +257,7 @@ inline int Internal::hyper_binary_resolve (Clause *reason) {
     clause.push_back (-dom);
     clause.push_back (lits[0]);
     probe_dominator_lrat (dom, reason);
-    if (opts.lrat && !opts.lratexternal)
+    if (lrat)
       clear_analyzed_literals ();
     Clause *c = new_hyper_binary_resolved_clause (red, 2);
     probe_reason = c;
@@ -270,8 +270,8 @@ inline int Internal::hyper_binary_resolve (Clause *reason) {
       LOG (reason, "subsumed original");
       mark_garbage (reason);
     }
-  } else if (non_root_level_literals && opts.lrat && !opts.lratexternal) {
-    // still calculate lrat and remember for later
+  } else if (non_root_level_literals && lrat) {
+    // still calculate LRAT and remember for later
     assert (!opts.probehbr);
     probe_dominator_lrat (dom, reason);
     clear_analyzed_literals ();
@@ -293,12 +293,14 @@ inline int Internal::hyper_binary_resolve (Clause *reason) {
 inline void Internal::probe_assign (int lit, int parent) {
   require_mode (PROBE);
   int idx = vidx (lit);
-  assert (!vals[idx]);
+  assert (!val (idx));
   assert (!flags (idx).eliminated () || !parent);
   assert (!parent || val (parent) > 0);
   Var &v = var (idx);
   v.level = level;
   v.trail = (int) trail.size ();
+  assert ((int) num_assigned < max_var);
+  num_assigned++;
   v.reason = level ? probe_reason : 0;
   probe_reason = 0;
   set_parent_reason_literal (lit, parent);
@@ -307,8 +309,7 @@ inline void Internal::probe_assign (int lit, int parent) {
   else
     assert (level == 1);
   const signed char tmp = sign (lit);
-  vals[idx] = tmp;
-  vals[-idx] = -tmp;
+  set_val (idx, tmp);
   assert (val (lit) > 0);
   assert (val (-lit) < 0);
   trail.push_back (lit);
@@ -350,7 +351,7 @@ void Internal::probe_assign_unit (int lit) {
 // same as in propagate but inlined here
 //
 inline void Internal::probe_lrat_for_units (int lit) {
-  if (!opts.lrat || opts.lratexternal)
+  if (!lrat)
     return;
   if (level)
     return; // not decision level 0
@@ -526,7 +527,7 @@ void Internal::failed_literal (int failed) {
     uip = uip ? probe_dominator (uip, other) : other;
   }
   probe_dominator_lrat (uip, conflict);
-  if (opts.lrat && !opts.lratexternal)
+  if (lrat)
     clear_analyzed_literals ();
 
   LOG ("found probing UIP %d", uip);
@@ -872,7 +873,10 @@ void CaDiCaL::Internal::probe (bool update_limits) {
   }
 
   stats.probingphases++;
-
+  if (external_prop) {
+    assert(!level);
+    private_steps = true;
+  }
   const int before = active ();
 
   // We trigger equivalent literal substitution (ELS) before ...
@@ -894,6 +898,11 @@ void CaDiCaL::Internal::probe (bool update_limits) {
   decompose (); // ... and (ELS) afterwards.
 
   last.probe.propagations = stats.propagations.search;
+
+  if (external_prop) {
+    assert(!level);
+    private_steps = false;
+  }
 
   if (!update_limits)
     return;

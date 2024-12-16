@@ -205,11 +205,24 @@ void Internal::compact () {
   /*======================================================================*/
 
   // Flush the external indices.  This has to occur before we map 'vals'.
+  // Also fixes external units.
   //
   for (auto eidx : external->vars) {
     int src = external->e2i[eidx];
-    if (!src)
+    if (!src) {
       continue;
+    }
+    assert (eidx > 0);
+    assert (external->ext_units.size () >= (size_t) 2 * eidx + 1);
+    uint64_t id1 = external->ext_units[2 * eidx];
+    uint64_t id2 = external->ext_units[2 * eidx + 1];
+    assert (!id1 || !id2);
+    if (!id1 && !id2) {
+      uint64_t new_id1 = unit_clauses[2 * src];
+      uint64_t new_id2 = unit_clauses[2 * src + 1];
+      external->ext_units[2 * eidx] = new_id1;
+      external->ext_units[2 * eidx + 1] = new_id2;
+    }
     int dst = mapper.map_lit (src);
     LOG ("compact %" PRId64
          " maps external %d to internal %d from internal %d",
@@ -248,8 +261,6 @@ void Internal::compact () {
     unit_clauses[2 * src] = 0;
     unit_clauses[2 * src + 1] = 0;
     assert (id);
-    if (proof)
-      proof->delete_unit_clause (id, lit);
   }
   unit_clauses.resize (2 * mapper.new_vsize);
   shrink_vector (unit_clauses);
@@ -305,8 +316,10 @@ void Internal::compact () {
   // In the second part we map, flush and shrink arrays.
   /*======================================================================*/
 
+  assert (trail.size () == num_assigned);
   mapper.map_flush_and_shrink_lits (trail);
   propagated = trail.size ();
+  num_assigned = trail.size ();
   if (mapper.first_fixed) {
     assert (trail.size () == 1);
     var (mapper.first_fixed).trail = 0; // before mapping 'vtab'

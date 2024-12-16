@@ -95,7 +95,6 @@ Clause *Internal::new_clause (bool red, int glue) {
   size_t bytes = Clause::bytes (size);
   Clause *c = (Clause *) new char[bytes];
 
-  stats.added.total++;
   c->id = ++clause_id;
 
   c->conditioned = false;
@@ -253,8 +252,9 @@ void Internal::delete_clause (Clause *c) {
     // from the proof perspective is that the deletion of these binary
     // clauses occurs later in the proof file.
     //
-    if (proof && c->size == 2)
+    if (proof && c->size == 2) {
       proof->delete_clause (c);
+    }
   }
   deallocate_clause (c);
 }
@@ -282,9 +282,16 @@ void Internal::mark_garbage (Clause *c) {
   // Delay tracing deletion of binary clauses.  See the discussion above in
   // 'delete_clause' and also in 'propagate'.
   //
-  if (proof && c->size != 2)
+  if (proof && c->size != 2) {
     proof->delete_clause (c);
+  }
 
+  // Because of the internal model checking, external forgettable clauses must
+  // be marked as removed already upon mark_garbage, can not wait until actual
+  // deletion.
+  if (is_external_forgettable (c->id))
+    mark_garbage_external_forgettable (c->id);
+  
   assert (stats.current.total > 0);
   stats.current.total--;
 
@@ -314,43 +321,64 @@ void Internal::mark_garbage (Clause *c) {
 // to learn a new unit clause (which was confusing in log files).
 
 void Internal::assign_original_unit (uint64_t id, int lit) {
-  assert (!level);
+  assert (!level || opts.chrono);
+  assert (!unsat);
   const int idx = vidx (lit);
   assert (!vals[idx]);
   assert (!flags (idx).eliminated ());
   Var &v = var (idx);
-  v.level = level;
+  v.level = 0;
   v.trail = (int) trail.size ();
   v.reason = 0;
   const signed char tmp = sign (lit);
-  vals[idx] = tmp;
-  vals[-idx] = -tmp;
-  assert (val (lit) > 0);
-  assert (val (-lit) < 0);
+  set_val (idx, tmp);
   trail.push_back (lit);
+  num_assigned++;
   const unsigned uidx = vlit (lit);
   unit_clauses[uidx] = id;
   LOG ("original unit assign %d", lit);
+  assert (num_assigned == trail.size () || level);
   mark_fixed (lit);
+  if (level)
+    return;
   if (propagate ())
     return;
+  assert (conflict);
   LOG ("propagation of original unit results in conflict");
   learn_empty_clause ();
 }
 
 // New clause added through the API, e.g., while parsing a DIMACS file.
+// Also used by external_propagate in various different modes.
+// clause, original, lrat_chain and external->eclause are set.
+// from_propagator and force_no_backtrack change the behaviour.
+// sometimes the pointer to the new clause is needed, therefore it is
+// made sure that newest_clause points to the new clause upon return.
 //
+// TODO: Find another name for 'tainted' in the context of ilb, tainted
+// is reconstruction related already and they should not mix.
 void Internal::add_new_original_clause (uint64_t id) {
-  if (level)
+
+  if (!from_propagator && level && !opts.ilb) {
     backtrack ();
+  } else if (tainted_literal) {
+    assert (val (tainted_literal));
+    int new_level = var (tainted_literal).level - 1;
+    assert (new_level >= 0);
+    backtrack (new_level);
+  }
+  assert (!tainted_literal);
   LOG (original, "original clause");
+  assert (clause.empty ());
   bool skip = false;
+  unordered_set<int> learned_levels;
+  size_t unassigned = 0;
+  newest_clause = 0;
   if (unsat) {
-    LOG ("skipping clause since formula already inconsistent");
+    LOG ("skipping clause since formula is already inconsistent");
     skip = true;
   } else {
     assert (clause.empty ());
-    assert (lrat_chain.empty ());
     for (const auto &lit : original) {
       int tmp = marked (lit);
       if (tmp > 0) {
@@ -360,13 +388,17 @@ void Internal::add_new_original_clause (uint64_t id) {
         skip = true;
       } else {
         mark (lit);
-        tmp = val (lit);
+        tmp = fixed (lit);
         if (tmp < 0) {
           LOG ("removing falsified literal %d", lit);
-          if (opts.lrat && !opts.lratexternal) {
-            uint64_t uid = (unit_clauses[vlit (-lit)]);
-            assert (uid);               // not sure if this holds.
-            lrat_chain.push_back (uid); // but it looks ok so far.
+          if (lrat) {
+            int elit = externalize (lit);
+            unsigned eidx = (elit > 0) + 2u * (unsigned) abs (elit);
+            if (!external->ext_units[eidx]) {
+              uint64_t uid = (unit_clauses[vlit (-lit)]);
+              assert (uid);
+              lrat_chain.push_back (uid);
+            }
           }
         } else if (tmp > 0) {
           LOG ("satisfied since literal %d true", lit);
@@ -374,6 +406,11 @@ void Internal::add_new_original_clause (uint64_t id) {
         } else {
           clause.push_back (lit);
           assert (flags (lit).status != Flags::UNUSED);
+          tmp = val (lit);
+          if (tmp)
+            learned_levels.insert (var (lit).level);
+          else
+            unassigned++;
         }
       }
     }
@@ -381,43 +418,93 @@ void Internal::add_new_original_clause (uint64_t id) {
       unmark (lit);
   }
   if (skip) {
-    if (proof)
-      proof->delete_clause (id, original);
+    if (from_propagator) {
+      stats.ext_prop.elearn_conf++;
+
+      // In case it was a skipped external forgettable, we need to mark it
+      // immediately as removed
+
+      if (is_external_forgettable (id))
+        mark_garbage_external_forgettable (id);
+
+    }
+    if (proof) {
+      proof->delete_external_original_clause (id, false, external->eclause);
+    }
   } else {
     uint64_t new_id = id;
-    size_t size = clause.size ();
+    const size_t size = clause.size ();
     if (original.size () > size) {
       new_id = ++clause_id;
       if (proof) {
-        if (opts.lrat && !opts.lratexternal) {
+        if (lrat)
           lrat_chain.push_back (id);
-          LOG (lrat_chain, "proof chain: ");
-          proof->add_derived_clause (new_id, clause, lrat_chain);
-        } else
-          proof->add_derived_clause (new_id, clause);
-        proof->delete_clause (id, original);
+        proof->add_derived_clause (new_id, false, clause, lrat_chain);
+        proof->delete_external_original_clause (id, false,
+                                                external->eclause);
       }
+      external->check_learned_clause ();
+
+      if (from_propagator) {
+        // The original form of the added clause is immediately forgotten
+        // TODO: shall we save and check the simplified form? (one with new_id)
+        if (is_external_forgettable (id))
+          mark_garbage_external_forgettable (id);
+      }
+
     }
+    external->eclause.clear ();
     lrat_chain.clear ();
     if (!size) {
-      if (!unsat) {
-        if (!original.size ())
-          VERBOSE (1, "found empty original clause");
-        else
-          MSG ("found falsified original clause");
-        unsat = true;
-        conflict_id = new_id;
-      }
+      if (from_propagator)
+        stats.ext_prop.elearn_conf++;
+      assert (!unsat);
+      if (!original.size ())
+        VERBOSE (1, "found empty original clause");
+      else
+        VERBOSE (1, "found falsified original clause");
+      unsat = true;
+      conflict_id = new_id;
+      marked_failed = true;
+      conclusion.push_back (new_id);
     } else if (size == 1) {
-      assign_original_unit (new_id, clause[0]);
+      if (force_no_backtrack) {
+        assert (level);
+        const int idx = vidx (clause[0]);
+        assert (val (clause[0]) >= 0);
+        assert (!flags (idx).eliminated ());
+        Var &v = var (idx);
+        assert (val (clause[0]));
+        v.level = 0;
+        v.reason = 0;
+        const unsigned uidx = vlit (clause[0]);
+        unit_clauses[uidx] = new_id;
+        mark_fixed (clause[0]);
+      } else {
+        const int lit = clause[0];
+        assert (!val (lit) || var (lit).level);
+        if (val (lit) < 0)
+          backtrack (var (lit).level - 1);
+        assert (val (lit) >= 0);
+        handle_external_clause (0);
+        assign_original_unit (new_id, lit);
+      }
     } else {
-      Clause *c = new_clause (false);
+      move_literals_to_watch ();
+#ifndef NDEBUG
+      check_watched_literal_invariants ();
+#endif
+      int glue = (int) (learned_levels.size () + unassigned);
+      assert (glue <= (int) clause.size ());
+      bool clause_redundancy = from_propagator && ext_clause_forgettable;
+      Clause *c = new_clause (clause_redundancy, glue);
       c->id = new_id;
       clause_id--;
       watch_clause (c);
-    }
-    if (original.size () > size) {
-      external->check_learned_clause ();
+      clause.clear ();
+      original.clear ();
+      handle_external_clause (c);
+      newest_clause = c;
     }
   }
   clause.clear ();
@@ -438,11 +525,7 @@ Clause *Internal::new_learned_redundant_clause (int glue) {
   external->check_learned_clause ();
   Clause *res = new_clause (true, glue);
   if (proof) {
-    if (opts.lrat && !opts.lratexternal) {
-      LOG (lrat_chain, "new learned redundant clause with proof chain: ");
-      proof->add_derived_clause (res, lrat_chain);
-    } else
-      proof->add_derived_clause (res);
+    proof->add_derived_clause (res, lrat_chain);
   }
   assert (watching ());
   watch_clause (res);
@@ -455,12 +538,7 @@ Clause *Internal::new_hyper_binary_resolved_clause (bool red, int glue) {
   external->check_learned_clause ();
   Clause *res = new_clause (red, glue);
   if (proof) {
-    if (opts.lrat && !opts.lratexternal) {
-      LOG (lrat_chain,
-           "new hyper binary resolved clause with proof chain: ");
-      proof->add_derived_clause (res, lrat_chain);
-    } else
-      proof->add_derived_clause (res);
+    proof->add_derived_clause (res, lrat_chain);
   }
   assert (watching ());
   watch_clause (res);
@@ -474,12 +552,7 @@ Clause *Internal::new_hyper_ternary_resolved_clause (bool red) {
   size_t size = clause.size ();
   Clause *res = new_clause (red, size);
   if (proof) {
-    if (opts.lrat && !opts.lratexternal) {
-      LOG (lrat_chain,
-           "new hyper ternary resolved clause with proof chain: ");
-      proof->add_derived_clause (res, lrat_chain);
-    } else
-      proof->add_derived_clause (res);
+    proof->add_derived_clause (res, lrat_chain);
   }
   assert (!watching ());
   return res;
@@ -494,12 +567,7 @@ Clause *Internal::new_clause_as (const Clause *orig) {
   Clause *res = new_clause (orig->redundant, new_glue);
   assert (!orig->redundant || !orig->keep || res->keep);
   if (proof) {
-    if (opts.lrat && !opts.lratexternal) {
-      LOG (lrat_chain,
-           "new clause as %" PRIu64 " with proof chain: ", orig->id);
-      proof->add_derived_clause (res, lrat_chain);
-    } else
-      proof->add_derived_clause (res);
+    proof->add_derived_clause (res, lrat_chain);
   }
   assert (watching ());
   watch_clause (res);
@@ -513,12 +581,7 @@ Clause *Internal::new_resolved_irredundant_clause () {
   external->check_learned_clause ();
   Clause *res = new_clause (false);
   if (proof) {
-    if (opts.lrat && !opts.lratexternal) {
-      LOG (lrat_chain,
-           "new resolved irredundant clause with proof chain: ");
-      proof->add_derived_clause (res, lrat_chain);
-    } else
-      proof->add_derived_clause (res);
+    proof->add_derived_clause (res, lrat_chain);
   }
   assert (!watching ());
   return res;

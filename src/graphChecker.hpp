@@ -36,7 +36,6 @@ public:
 
 class PartiallyDefinedGraphChecker : public GraphChecker
 {
-
 public:
     int counter = 0; // number of calls since last check
     int frequency = 30;
@@ -50,6 +49,7 @@ public:
      * @param matrix The current partially defined graph given as adjacency matrix
      * @param final True if matrix is fully defined
      */
+    
     void check(const adjacency_matrix_t &matrix, bool final)
     {
         counter++;
@@ -77,7 +77,6 @@ public:
 
 class PartiallyDefinedMultiGraphChecker : public GraphChecker
 {
-
 public:
     int counter = 0; // number of calls since last check
     int frequency = 30;
@@ -116,7 +115,6 @@ public:
 
 class ComplexPartiallyDefinedGraphChecker : public GraphChecker
 {
-
 public:
     int counter; // number of calls since last check
     int frequency;

@@ -45,7 +45,8 @@ public:
 
   bool checkSolutionInProp = true;       // check solution in the propagator and continue search without restarting; for more complex propagators, use the incremental interface
   bool propagateLiteralsCadical = false; // whether only literals should be propagated and clauses added at conflict analysis
-  bool irredundantSymClauses = false;    // prevent symmetry breaking clauses from being deleted on clause DB cleanup
+  // bool irredundantSymClauses = false;    // prevent symmetry breaking clauses from being deleted on clause DB cleanup
+  bool forgettableClauses = false; // whether clauses added by the propagator can be forgotten or treated as part of the original CNF
 
   bool non010colorable = false; // TODO get rid of as config parameter
 
@@ -111,7 +112,6 @@ public:
 
   // change the number of vertices in an existing SolverConfig object this way to update all dependencies
   void set_vertices(int vertices);
-
   void init_edge_vars();
   void init_multi_edge_vars(); // to be called only after init_edge_vars()
   void init_triangle_vars(int triangleVars = 0);
@@ -236,9 +236,14 @@ protected:
   int nModels = 0;
   const vector<int> *model = NULL; // model of the last canidate solution
 
+  bool inPrerunState = false; // whether in a prerun state; in this state no cubes are generated
+
   // functions which must be implemented for the concrete solver
   virtual bool solve(vector<int> assumptions) = 0;              // solve the formula under the assumption
   virtual bool solve(vector<int> assumptions, int timeout) = 0; // solve with a given timeout; return false if timeout was reached
+
+  virtual void setDefaultCubingArguments() = 0; // after prerun, the solver will be set to the default cubing arguments
+  virtual bool getMinimalAdjacencyMatrixAssignmentCutoff() = 0;
 
   virtual void printFullModel() = 0;
 

@@ -33,6 +33,8 @@ void CadicalSolver::init(SolverConfig config, cnf_t &cnf)
     // solver->set("log", 1);
     // solver->set("debug", 1);
 
+    // solver->set("probeint", 1);
+
     if (config.cadicalConfig != "") {
       std::istringstream iss(config.cadicalConfig);
       string param;
@@ -167,7 +169,7 @@ bool CadicalSolver::solve(vector<int> assumptions)
             return false;
         if (res != 10)
         {
-            EXIT_UNWANTED_STATE // TODO just to be sure for know
+            return false; // return false if wasn't solved completely
         }
 
         if (check_solution()) // true if no clause was added
@@ -186,10 +188,13 @@ void CadicalSolver::printFullModel()
     printf("\n");
 }
 
-bool CadicalSolver::solve(vector<int>, int)
+bool CadicalSolver::solve(vector<int> assumptions, int timeout)
 {
-    printf("Not implemented yet\n");
-    EXIT_UNWANTED_STATE
+    TimeoutTerminator t = TimeoutTerminator(timeout);
+    solver->connect_terminator(&t);
+    bool res = solve(assumptions);
+    solver->disconnect_terminator();
+    return res;
 }
 
 // PySMS API

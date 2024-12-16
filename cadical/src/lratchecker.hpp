@@ -2,6 +2,7 @@
 #define _lratchecker_hpp_INCLUDED
 
 /*------------------------------------------------------------------------*/
+#include <unordered_map>
 
 namespace CaDiCaL {
 
@@ -24,18 +25,19 @@ struct LratCheckerClause {
   unsigned size;
   bool used;
   bool tautological;
-  int literals[0]; // 'literals' of length 'size'
+  int literals[1]; // 'literals' of length 'size'
 };
 
 /*------------------------------------------------------------------------*/
 
-class LratChecker {
+class LratChecker : public StatTracer {
 
   Internal *internal;
 
   // Capacity of variable values.
   //
   int64_t size_vars;
+  bool strict_lrat;
 
   // The 'watchers' and 'marks' data structures are not that time critical
   // and thus we access them by first mapping a literal to 'unsigned'.
@@ -47,14 +49,20 @@ class LratChecker {
 
   vector<signed char> checked_lits;
   vector<signed char> marks; // mark bits of literals
+  unordered_map<uint64_t, vector<int>> clauses_to_reconstruct;
+  vector<int> assumptions;
+  vector<int> constraint;
+  bool concluded;
 
-  uint64_t num_clauses;        // number of clauses in hash table
+  uint64_t num_clauses; // number of clauses in hash table
+  uint64_t num_finalized;
   uint64_t num_garbage;        // number of garbage clauses
   uint64_t size_clauses;       // size of clause hash table
   LratCheckerClause **clauses; // hash table of clauses
   LratCheckerClause *garbage;  // linked list of garbage clauses
 
   vector<int> imported_clause; // original clause for reporting
+  vector<uint64_t> assumption_clauses;
 
   void enlarge_vars (int64_t idx);
   void import_literal (int lit);
@@ -64,7 +72,8 @@ class LratChecker {
 
   uint64_t nonces[num_nonces];      // random numbers for hashing
   uint64_t last_hash;               // last computed hash value of clause
-  uint64_t last_id;                 // id of the last added clause
+  uint64_t last_id;                 // id of the last added/deleted clause
+  uint64_t current_id;              // id of the last added clause
   uint64_t compute_hash (uint64_t); // compute and save hash value of clause
 
   // Reduce hash value to the actual size.
@@ -93,7 +102,8 @@ class LratChecker {
     int64_t original; // number of added original clauses
     int64_t derived;  // number of added derived clauses
 
-    int64_t deleted; // number of deleted clauses
+    int64_t deleted;   // number of deleted clauses
+    int64_t finalized; // number of finalized clauses
 
     int64_t insertions; // number of clauses added to hash table
     int64_t collisions; // number of hash collisions in 'find'
@@ -109,19 +119,45 @@ public:
   LratChecker (Internal *);
   ~LratChecker ();
 
-  void add_original_clause (uint64_t, const vector<int> &);
-  // check the proof chain for the new clause and add it to the checker
-  void add_derived_clause (uint64_t, const vector<int> &,
-                           const vector<uint64_t> &);
+  void connect_internal (Internal *i) override;
+  void begin_proof (uint64_t) override;
 
-  // used for frat. just assume the clause is correct because we have no
-  // proof.
-  void add_derived_clause (uint64_t, const vector<int> &);
+  void add_original_clause (uint64_t, bool, const vector<int> &,
+                            bool restore) override;
+  void restore_clause (uint64_t, const vector<int> &);
+
+  // check the proof chain for the new clause and add it to the checker
+  void add_derived_clause (uint64_t, bool, const vector<int> &,
+                           const vector<uint64_t> &) override;
 
   // check if the clause is present and delete it from the checker
-  void delete_clause (uint64_t, const vector<int> &);
+  void delete_clause (uint64_t, bool, const vector<int> &) override;
+  // check if the clause is present and delete it from the checker
+  void weaken_minus (uint64_t, const vector<int> &) override;
 
-  void print_stats ();
+  // check if the clause is present and delete it from the checker
+  void finalize_clause (uint64_t, const vector<int> &) override;
+
+  // check the proof chain of the assumption clause and delete it
+  // immediately also check that they contain only assumptions and
+  // constraints
+  void add_assumption_clause (uint64_t, const vector<int> &,
+                              const vector<uint64_t> &) override;
+
+  // mark lit as assumption
+  void add_assumption (int) override;
+
+  // mark lits as constraint
+  void add_constraint (const vector<int> &) override;
+
+  void reset_assumptions () override;
+
+  // check if all clauses have been deleted
+  void report_status (int, uint64_t) override;
+
+  void conclude_unsat (ConclusionType, const vector<uint64_t> &) override;
+
+  void print_stats () override;
   void dump (); // for debugging purposes only
 };
 

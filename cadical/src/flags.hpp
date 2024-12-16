@@ -24,7 +24,7 @@ struct Flags { // Variable flags.
   bool subsume : 1; // added since last 'subsume' round (*)
   bool ternary : 1; // added in ternary clause since last 'ternary' (*)
 
-  unsigned char decompose : 2; // generate correct lrat chains in decompose
+  unsigned char decompose : 2; // generate correct LRAT chains in decompose
 
   // These literal flags are used by blocked clause elimination ('block').
   //
@@ -34,7 +34,9 @@ struct Flags { // Variable flags.
   // Bits for handling assumptions.
   //
   unsigned char assumed : 2;
-  unsigned char failed : 2;
+  unsigned char failed : 2; // 0 if not part of failure
+                            // 1 if positive lit is in failure
+                            // 2 if negated lit is in failure
 
   enum {
     UNUSED = 0,

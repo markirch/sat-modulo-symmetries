@@ -2,8 +2,10 @@
 #define _file_hpp_INCLUDED
 
 #include <cassert>
+#include <cstdint>
 #include <cstdio>
 #include <cstdlib>
+#include <vector>
 
 #ifndef NDEBUG
 #include <climits>
@@ -30,36 +32,43 @@ struct Internal;
 
 class File {
 
-#ifndef QUIET
   Internal *internal;
-#endif
 #if !defined(QUIET) || !defined(NDEBUG)
   bool writing;
 #endif
 
-  int close_file; // need to close file (1=fclose, 2=pclose)
+  int close_file; // need to close file (1=fclose, 2=pclose, 3=pipe)
+  int child_pid;
   FILE *file;
-  const char *_name;
+  char *_name;
   uint64_t _lineno;
   uint64_t _bytes;
 
-  File (Internal *, bool, int, FILE *, const char *);
+  File (Internal *, bool, int, int, FILE *, const char *);
 
   static FILE *open_file (Internal *, const char *path, const char *mode);
   static FILE *read_file (Internal *, const char *path);
   static FILE *write_file (Internal *, const char *path);
 
+  static void split_str (const char *, std::vector<char *> &);
+  static void delete_str_vector (std::vector<char *> &);
+
   static FILE *open_pipe (Internal *, const char *fmt, const char *path,
                           const char *mode);
   static FILE *read_pipe (Internal *, const char *fmt, const int *sig,
                           const char *path);
-  static FILE *write_pipe (Internal *, const char *fmt, const char *path);
+#ifndef __WIN32
+  static FILE *write_pipe (Internal *, const char *fmt, const char *path,
+                           int &child_pid);
+#endif
 
 public:
-  static char *find (const char *prg);     // search in 'PATH'
-  static bool exists (const char *path);   // file exists?
-  static bool writable (const char *path); // can write to that file?
-  static size_t size (const char *path);   // file size in bytes
+  static char *find_program (const char *prg); // search in 'PATH'
+  static bool exists (const char *path);       // file exists?
+  static bool writable (const char *path);     // can write to that file?
+  static size_t size (const char *path);       // file size in bytes
+
+  bool piping (); // Is opened file a pipe?
 
   // Does the file match the file type signature.
   //
@@ -187,8 +196,10 @@ public:
   uint64_t lineno () const { return _lineno; }
   uint64_t bytes () const { return _bytes; }
 
+  void connect_internal (Internal *i) { internal = i; }
   bool closed () { return !file; }
-  void close ();
+
+  void close (bool print = false);
   void flush ();
 };
 

@@ -33,6 +33,7 @@ extern "C" {
 #include <algorithm>
 #include <queue>
 #include <string>
+#include <unordered_set>
 #include <vector>
 
 /*------------------------------------------------------------------------*/
@@ -56,20 +57,25 @@ extern "C" {
 #include "contract.hpp"
 #include "cover.hpp"
 #include "decompose.hpp"
+#include "drattracer.hpp"
 #include "elim.hpp"
 #include "ema.hpp"
 #include "external.hpp"
 #include "file.hpp"
 #include "flags.hpp"
 #include "format.hpp"
+#include "frattracer.hpp"
 #include "heap.hpp"
+#include "idruptracer.hpp"
 #include "instantiate.hpp"
 #include "internal.hpp"
 #include "level.hpp"
+#include "lidruptracer.hpp"
 #include "limit.hpp"
 #include "logging.hpp"
 #include "lratbuilder.hpp"
 #include "lratchecker.hpp"
+#include "lrattracer.hpp"
 #include "message.hpp"
 #include "occs.hpp"
 #include "options.hpp"
@@ -90,6 +96,7 @@ extern "C" {
 #include "tracer.hpp"
 #include "util.hpp"
 #include "var.hpp"
+#include "veripbtracer.hpp"
 #include "version.hpp"
 #include "vivify.hpp"
 #include "watch.hpp"
@@ -103,6 +110,9 @@ using namespace std;
 struct Coveror;
 struct External;
 struct Walker;
+class Tracer;
+class FileTracer;
+class StatTracer;
 
 struct CubesWithStatus {
   int status = 0;
@@ -161,23 +171,29 @@ struct Internal {
   bool stable;                 // true during stabilization phase
   bool reported;               // reported in this solving call
   bool external_prop;         // true if an external propagator is connected
+  bool did_external_prop;     // true if ext. propagation happened
   bool external_prop_is_lazy; // true if the external propagator is lazy
+  bool forced_backt_allowed;  // external propagator can force backtracking
+  bool private_steps;         // no notification of ext. prop during these steps
   char rephased;              // last type of resetting phases
   Reluctant reluctant;        // restart counter in stable mode
   size_t vsize;               // actually allocated variable data size
   int max_var;                // internal maximum variable index
   uint64_t clause_id;         // last used id for clauses
-  uint64_t original_id;       // ids for original clauses to produce lrat
+  uint64_t original_id;       // ids for original clauses to produce LRAT
   uint64_t reserved_ids;      // number of reserved ids for original clauses
   uint64_t conflict_id;       // store conflict id for finalize (frat)
-  vector<uint64_t> unit_clauses; // keep track of unit_clauses (lrat/frat)
-  vector<uint64_t> lrat_chain;   // create lrat in solver: option lratdirect
-  vector<uint64_t> mini_chain;   // used to create lrat in minimize
-  vector<uint64_t> minimize_chain; // used to create lrat in minimize
+  bool concluded;             // keeps track of conclude
+  vector<uint64_t> conclusion;   // store ids of conclusion clauses
+  vector<uint64_t> unit_clauses; // keep track of unit_clauses (LRAT/FRAT)
+  vector<uint64_t> lrat_chain;   // create LRAT in solver: option lratdirect
+  vector<uint64_t> mini_chain;   // used to create LRAT in minimize
+  vector<uint64_t> minimize_chain; // used to create LRAT in minimize
   vector<uint64_t> unit_chain;     // used to avoid duplicate units
-  vector<Clause *> inst_chain;     // for lrat in instantiate
+  vector<Clause *> inst_chain;     // for LRAT in instantiate
   vector<vector<vector<uint64_t>>>
       probehbr_chains;          // only used if opts.probehbr=false
+  bool lrat;                    // generate LRAT internally
   int level;                    // decision level ('control.size () - 1')
   Phases phases;                // saved, target and best phases
   signed char *vals;            // assignment [-max_var,max_var]
@@ -202,7 +218,13 @@ struct Internal {
   vector<Watches> wtab;         // table of watches for all literals
   Clause *conflict;             // set in 'propagation', reset in 'analyze'
   Clause *ignore;               // ignored during 'vivify_propagate'
+  Clause *dummy_binary;         // Dummy binary clause for subsumption
   Clause *external_reason;      // used as reason at external propagations
+  Clause *newest_clause;        // used in external_propagate
+  bool force_no_backtrack;      // for new clauses with external propagator
+  bool from_propagator;         // differentiate new clauses...
+  bool ext_clause_forgettable;  // Is new clause from propagator forgettable
+  int tainted_literal;          // used for ILB
   size_t notified;           // next trail position to notify external prop
   Clause *probe_reason;      // set during probing
   size_t propagated;         // next trail position to propagate
@@ -226,6 +248,8 @@ struct Internal {
   vector<int> shrinkable;    // removable or poison in 'shrink'
   Reap reap;                 // radix heap for shrink
 
+  size_t num_assigned; // check for satisfied
+
   vector<int> probes;       // remaining scheduled probes
   vector<Level> control;    // 'level + 1 == control.size ()'
   vector<Clause *> clauses; // ordered collection of all clauses
@@ -233,13 +257,17 @@ struct Internal {
   Limit lim;                // limits for various phases
   Last last;                // statistics at last occurrence
   Inc inc;                  // increments on limits
-  Proof *proof;             // clausal proof observers if non zero
-  Checker *checker;         // online proof checker observing proof
-  Tracer *tracer;           // proof to file tracer observing proof
-  LratChecker *lratchecker; // online lrat checker observing proof
-  LratBuilder *lratbuilder; // lrat proof chain builder observing proof
-  Options opts;             // run-time options
-  Stats stats;              // statistics
+
+  Proof *proof;             // abstraction layer between solver and tracers
+  LratBuilder *lratbuilder; // special proof tracer
+  vector<Tracer *>
+      tracers; // proof tracing objects (ie interpolant calulator)
+  vector<FileTracer *>
+      file_tracers; // file proof tracers (ie DRAT, LRAT...)
+  vector<StatTracer *> stat_tracers; // checkers
+
+  Options opts; // run-time options
+  Stats stats;  // statistics
 #ifndef QUIET
   Profiles profiles;         // time profiles for various functions
   bool force_phase_messages; // force 'phase (...)' messages
@@ -282,6 +310,9 @@ struct Internal {
   void init_scores (int old_max_var, int new_max_var);
 
   void add_original_lit (int lit);
+
+  // only able to restore irredundant clause
+  void finish_added_clause_with_id (uint64_t lit, bool restore = false);
 
   // Reserve ids for original clauses to produce lrat
   void reserve_ids (int number);
@@ -548,7 +579,7 @@ struct Internal {
   void push_literals_of_block (const std::vector<int>::reverse_iterator &,
                                const std::vector<int>::reverse_iterator &,
                                int, unsigned);
-  unsigned shrink_next (unsigned &, unsigned &);
+  unsigned shrink_next (int, unsigned &, unsigned &);
   std::vector<int>::reverse_iterator
   minimize_and_shrink_block (std::vector<int>::reverse_iterator &,
                              unsigned int &, unsigned int &, const int);
@@ -570,7 +601,7 @@ struct Internal {
   // Forward reasoning through propagation in 'propagate.cpp'.
   //
   int assignment_level (int lit, Clause *);
-  void build_chain_for_units (int lit, Clause *reason);
+  void build_chain_for_units (int lit, Clause *reason, bool forced);
   void build_chain_for_empty ();
   void search_assign (int lit, Clause *);
   void search_assign_driving (int lit, Clause *reason);
@@ -591,12 +622,13 @@ struct Internal {
   //
   bool minimize_literal (int lit, int depth = 0);
   void minimize_clause ();
-  void calculate_minimize_chain (int lit);
+  void calculate_minimize_chain (int lit, std::vector<int> &stack);
 
   // Learning from conflicts in 'analyze.cc'.
   //
   void learn_empty_clause ();
   void learn_unit_clause (int lit);
+
   void bump_variable (int lit);
   void bump_variables ();
   int recompute_glue (Clause *);
@@ -618,6 +650,7 @@ struct Internal {
   void otfs_strengthen_clause (Clause *, int, int,
                                const std::vector<int> &);
   void otfs_subsume_clause (Clause *subsuming, Clause *subsumed);
+  int otfs_find_backtrack_level (int &forced);
   Clause *on_the_fly_strengthen (Clause *conflict, int lit);
   void analyze ();
   void iterate (); // report learned unit clause
@@ -626,21 +659,37 @@ struct Internal {
   //
   bool external_propagate ();
   bool external_check_solution ();
-  Clause *add_external_clause (bool as_redundant, int propagated_lit = 0);
-  Clause *learn_external_reason_clause (int lit, int falsified_elit = 0);
+  void add_external_clause (int propagated_lit = 0,
+                            bool no_backtrack = false);
+  Clause *learn_external_reason_clause (int lit, int falsified_elit = 0,
+                                        bool no_backtrack = false);
+  Clause *wrapped_learn_external_reason_clause (int lit);
   void explain_external_propagations ();
   void explain_reason (int lit, Clause *, int &open);
-  void move_literal_to_watch (bool other_watch);
-  bool handle_external_clause (Clause *);
+  void move_literals_to_watch ();
+  void handle_external_clause (Clause *);
   void notify_assignments ();
   void notify_decision ();
   void notify_backtrack (size_t new_level);
+  void force_backtrack (size_t new_level);
   int ask_decision ();
+  bool ask_external_clause ();
   void add_observed_var (int ilit);
   void remove_observed_var (int ilit);
   bool observed (int ilit) const;
   bool is_decision (int ilit);
   void check_watched_literal_invariants ();
+  void set_tainted_literal ();
+  void renotify_trail_after_ilb ();
+  void renotify_trail_after_local_search ();
+  void renotify_full_trail ();
+  void connect_propagator ();
+  void mark_garbage_external_forgettable (int64_t id);
+  bool is_external_forgettable (int64_t id);
+#ifndef NDEBUG  
+  bool get_merged_literals (std::vector<int>&);
+  void get_all_fixed_literals (std::vector<int>&);
+#endif
 
   // Use last learned clause to subsume some more.
   //
@@ -725,6 +774,9 @@ struct Internal {
   bool arenaing ();
   void garbage_collection ();
 
+  // only remove binary clauses from the watches
+  void remove_garbage_binaries ();
+
   // Set-up occurrence list counters and containers.
   //
   void init_occs ();
@@ -769,7 +821,9 @@ struct Internal {
   void flush_vivification_schedule (Vivifier &);
   bool consider_to_vivify_clause (Clause *candidate, bool redundant_mode);
   void vivify_analyze_redundant (Vivifier &, Clause *start, bool &);
-  void vivify_build_lrat (int, Clause *);
+  void vivify_build_lrat (int, Clause *,
+                          std::vector<std::tuple<int, Clause *, bool>> &);
+  void vivify_chain_for_units (int lit, Clause *reason);
   bool vivify_all_decisions (Clause *candidate, int subsume);
   void vivify_post_process_analysis (Clause *candidate, int subsume);
   void vivify_strengthen (Clause *candidate);
@@ -897,13 +951,13 @@ struct Internal {
     return (f.skip & bit) != 0;
   }
 
-  // During decompose ignore literals where we already built lrat chains
+  // During decompose ignore literals where we already built LRAT chains
   //
   void mark_decomposed (int lit) {
     Flags &f = flags (lit);
     const unsigned bit = bign (lit);
     assert ((f.decompose & bit) == 0);
-    LOG ("marking lrat chain of %d to be skipped", lit);
+    LOG ("marking LRAT chain of %d to be skipped", lit);
     decomposed.push_back (lit);
     f.decompose |= bit;
   }
@@ -978,11 +1032,15 @@ struct Internal {
   int elim_round (bool &completed);
   void elim (bool update_limits = true);
 
+  // instantiate
+  //
   void inst_assign (int lit);
   bool inst_propagate ();
   void collect_instantiation_candidates (Instantiator &);
   bool instantiate_candidate (int lit, Clause *);
   void instantiate (Instantiator &);
+
+  void new_trail_level (int lit);
 
   // Hyper ternary resolution.
   //
@@ -1037,9 +1095,10 @@ struct Internal {
   // (BIG) and equivalent literal substitution (ELS) in 'decompose.cpp'.
   //
   void decompose_conflicting_scc_lrat (DFS *dfs, vector<int> &);
+  void build_lrat_for_clause (const vector<vector<Clause *>> &dfs_chains,
+                              bool invert = false);
   vector<Clause *> decompose_analyze_binary_clauses (DFS *dfs, int from);
   void decompose_analyze_binary_chain (DFS *dfs, int);
-  void decompose_analyze_lrat (DFS *dfs, Clause *reason);
   bool decompose_round ();
   void decompose ();
 
@@ -1054,10 +1113,12 @@ struct Internal {
   //
   void assume_analyze_literal (int lit);
   void assume_analyze_reason (int lit, Clause *reason);
-  void assume (int);         // New assumption literal.
-  bool failed (int lit);     // Literal failed assumption?
-  void reset_assumptions (); // Reset after 'solve' call.
-  void failing ();           // Prepare failed assumptions.
+  void assume (int);                  // New assumption literal.
+  bool failed (int lit);              // Literal failed assumption?
+  void reset_assumptions ();          // Reset after 'solve' call.
+  void sort_and_reuse_assumptions (); // reorder the assumptions in order to
+                                      // reuse parts of the trail
+  void failing ();                    // Prepare failed assumptions.
 
   bool assumed (int lit) { // Marked as assumption.
     Flags &f = flags (lit);
@@ -1156,7 +1217,7 @@ struct Internal {
   int cdcl_loop_with_inprocessing ();
   void reset_solving ();
   int solve (bool preprocess_only = false);
-  void finalize ();
+  void finalize (int);
 
   //
   int lookahead ();
@@ -1192,6 +1253,19 @@ struct Internal {
     assert (lit);
     assert (lit <= max_var);
     return vals[lit];
+  }
+
+  // As suggested by Matt Ginsberg it might be useful to factor-out a common
+  // setter function for setting and resetting the value of a literal.
+  //
+  void set_val (int lit, signed char val) {
+    assert (-1 <= val);
+    assert (val <= 1);
+    assert (-max_var <= lit);
+    assert (lit);
+    assert (lit <= max_var);
+    vals[lit] = val;
+    vals[-lit] = -val;
   }
 
   // As 'val' but restricted to the root-level value of a literal.
@@ -1240,7 +1314,12 @@ struct Internal {
     unsigned &ref = frozentab[idx];
     if (ref < UINT_MAX) {
       if (!--ref) {
-        LOG ("variable %d completely molten", idx);
+        if (relevanttab[idx]) {
+          LOG ("variable %d is observed, can not be completely molten",
+               idx);
+          ref++;
+        } else
+          LOG ("variable %d completely molten", idx);
       } else
         LOG ("variable %d melted once but remains frozen %u times", lit,
              ref);
@@ -1258,11 +1337,22 @@ struct Internal {
   // Enable and disable proof logging and checking.
   //
   void new_proof_on_demand ();
-  void build_full_lrat (); // enable full lrat
-  void close_trace ();     // Stop proof tracing.
-  void flush_trace ();     // Flush proof trace file.
-  void trace (File *);     // Start write proof file.
-  void check ();           // Enable online proof checking.
+  void setup_lrat_builder ();            // if opts.externallrat=true
+  void force_lrat ();                    // sets lrat=true
+  void close_trace (bool stats = false); // Stop proof tracing.
+  void flush_trace (bool stats = false); // Flush proof trace file.
+  void trace (File *);                   // Start write proof file.
+  void check ();                         // Enable online proof checking.
+
+  void connect_proof_tracer (Tracer *tracer, bool antecedents);
+  void connect_proof_tracer (InternalTracer *tracer, bool antecedents);
+  void connect_proof_tracer (StatTracer *tracer, bool antecedents);
+  void connect_proof_tracer (FileTracer *tracer, bool antecedents);
+  bool disconnect_proof_tracer (Tracer *tracer);
+  bool disconnect_proof_tracer (StatTracer *tracer);
+  bool disconnect_proof_tracer (FileTracer *tracer);
+  void conclude_unsat ();
+  void reset_concluded ();
 
   // Dump to '<stdout>' as DIMACS for debugging.
   //
@@ -1273,12 +1363,16 @@ struct Internal {
   //
   bool traverse_clauses (ClauseIterator &);
 
+  // Export and traverse all irredundant (non-unit) clauses.
+  //
+  bool traverse_constraint (ClauseIterator &);
+
   /*----------------------------------------------------------------------*/
 
   double solve_time (); // accumulated time spent in 'solve ()'
 
-  double process_time (); // since solver was initialized
-  double real_time ();    // since solver was initialized
+  double process_time () const; // since solver was initialized
+  double real_time () const;    // since solver was initialized
 
   double time () { return opts.realtime ? real_time () : process_time (); }
 

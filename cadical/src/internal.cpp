@@ -10,14 +10,18 @@ Internal::Internal ()
       localsearching (false), lookingahead (false), preprocessing (false),
       protected_reasons (false), force_saved_phase (false),
       searching_lucky_phases (false), stable (false), reported (false),
-      external_prop (false), external_prop_is_lazy (true), rephased (0),
-      vsize (0), max_var (0), clause_id (0), original_id (0),
-      reserved_ids (0), level (0), vals (0), score_inc (1.0), scores (this),
-      conflict (0), ignore (0), external_reason (&external_reason_clause),
-      notified (0), propagated (0), propagated2 (0), propergated (0),
-      best_assigned (0), target_assigned (0), no_conflict_until (0),
-      unsat_constraint (false), marked_failed (true), proof (0),
-      checker (0), tracer (0), lratchecker (0), lratbuilder (0),
+      external_prop (false), did_external_prop (false),
+      external_prop_is_lazy (true), forced_backt_allowed (false), 
+      private_steps (false), rephased (0), vsize (0), max_var (0), 
+      clause_id (0), original_id (0), reserved_ids (0), 
+      conflict_id (0), concluded (false), lrat (false), level (0), vals (0),
+      score_inc (1.0), scores (this), conflict (0), ignore (0),
+      external_reason (&external_reason_clause), newest_clause (0),
+      force_no_backtrack (false), from_propagator (false), ext_clause_forgettable (false),
+      tainted_literal (0), notified (0), probe_reason (0), propagated (0),
+      propagated2 (0), propergated (0), best_assigned (0),
+      target_assigned (0), no_conflict_until (0), unsat_constraint (false),
+      marked_failed (true), num_assigned (0), proof (0), lratbuilder (0),
       opts (this),
 #ifndef QUIET
       profiles (this), force_phase_messages (false),
@@ -26,21 +30,37 @@ Internal::Internal ()
       termination_forced (false), vars (this->max_var),
       lits (this->max_var) {
   control.push_back (Level (0, 0));
+
+  // The 'dummy_binary' is used in 'try_to_subsume_clause' to fake a real
+  // clause, which then can be used to subsume or strengthen the given
+  // clause in one routine for both binary and non binary clauses.  This
+  // fake binary clause is always kept non-redundant (and not-moved etc.)
+  // due to the following 'memset'.  Only literals will be changed.
+
+  // In a previous version we used local automatic allocated 'Clause' on the
+  // stack, which became incompatible with several compilers (see the
+  // discussion on flexible array member in 'Clause.cpp').
+
+  size_t bytes = Clause::bytes (2);
+  dummy_binary = (Clause *) new char[bytes];
+  memset (dummy_binary, 0, bytes);
+  dummy_binary->size = 2;
 }
 
 Internal::~Internal () {
+  delete[](char *) dummy_binary;
   for (const auto &c : clauses)
     delete_clause (c);
   if (proof)
     delete proof;
-  if (tracer)
-    delete tracer;
-  if (checker)
-    delete checker;
-  if (lratchecker)
-    delete lratchecker;
   if (lratbuilder)
     delete lratbuilder;
+  for (auto &tracer : tracers)
+    delete tracer;
+  for (auto &filetracer : file_tracers)
+    delete filetracer;
+  for (auto &stattracer : stat_tracers)
+    delete stattracer;
   if (vals) {
     vals -= vsize;
     delete[] vals;
@@ -102,7 +122,8 @@ template <class T> static void enlarge_zero (vector<T> &v, size_t N) {
 /*------------------------------------------------------------------------*/
 
 void Internal::enlarge (int new_max_var) {
-  assert (!level || external_prop);
+  // New variables can be created that can invoke enlarge anytime (via calls
+  // during ipasir-up call-backs), thus assuming (!level) is not correct 
   size_t new_vsize = vsize ? 2 * vsize : 1 + (size_t) new_max_var;
   while (new_vsize <= (size_t) new_max_var)
     new_vsize *= 2;
@@ -135,8 +156,8 @@ void Internal::enlarge (int new_max_var) {
 void Internal::init_vars (int new_max_var) {
   if (new_max_var <= max_var)
     return;
-  if (level && !external_prop)
-    backtrack ();
+  // New variables can be created that can invoke enlarge anytime (via calls
+  // during ipasir-up call-backs), thus assuming (!level) is not correct 
   LOG ("initializing %d internal variables from %d to %d",
        new_max_var - max_var, max_var + 1, new_max_var);
   if ((size_t) new_max_var >= vsize)
@@ -173,23 +194,51 @@ void Internal::add_original_lit (int lit) {
       // Use the external form of the clause for printing in proof
       // Externalize(internalized literal) != external literal
       assert (!original.size () || !external->eclause.empty ());
-      proof->add_original_clause (id, original);
-      // proof->add_external_original_clause (id, external->eclause);
+      proof->add_external_original_clause (id, false, external->eclause);
     }
+    if (internal->opts.check &&
+      (internal->opts.checkwitness || internal->opts.checkfailed)) {
+      bool forgettable = from_propagator && ext_clause_forgettable;
+      if (forgettable) {
+        assert (!original.size () || !external->eclause.empty ());
+
+        // First integer is the presence-flag (even if the clause is empty)
+        external->forgettable_original[id] = {1};
+       
+        for (auto const& elit : external->eclause)
+          external->forgettable_original[id].push_back(elit);
+        
+        LOG (external->eclause, "clause added to external forgettable map:");
+      }
+    }
+    
     add_new_original_clause (id);
     original.clear ();
   }
+}
+
+void Internal::finish_added_clause_with_id (uint64_t id, bool restore) {
+  if (proof) {
+    // Use the external form of the clause for printing in proof
+    // Externalize(internalized literal) != external literal
+    assert (!original.size () || !external->eclause.empty ());
+    proof->add_external_original_clause (id, false, external->eclause,
+                                         restore);
+  }
+  add_new_original_clause (id);
+  original.clear ();
 }
 
 /*------------------------------------------------------------------------*/
 
 void Internal::reserve_ids (int number) {
   // return;
+  LOG ("reserving %d ids", number);
   assert (number >= 0);
   assert (!clause_id && !reserved_ids && !original_id);
   clause_id = reserved_ids = number;
-  if (tracer)
-    tracer->set_first_id (reserved_ids);
+  if (proof)
+    proof->begin_proof (reserved_ids);
 }
 
 /*------------------------------------------------------------------------*/
@@ -556,6 +605,11 @@ int Internal::try_to_satisfy_formula_by_saved_phases () {
   assert (!force_saved_phase);
   assert (propagated == trail.size ());
   force_saved_phase = true;
+  if (external_prop) {
+    assert (!level);
+    LOG ("external notifications are turned off during preprocessing.");
+    private_steps = true;
+  }
   int res = 0;
   while (!res) {
     if (satisfied ()) {
@@ -575,6 +629,14 @@ int Internal::try_to_satisfy_formula_by_saved_phases () {
   }
   assert (force_saved_phase);
   force_saved_phase = false;
+  if (external_prop) {
+    private_steps = false;
+    LOG("external notifications are turned back on.");
+    if (!level) notify_assignments (); // In case fixed assignments were found.
+    else {
+      renotify_trail_after_local_search ();
+    }
+  }
   return res;
 }
 
@@ -586,11 +648,13 @@ void Internal::produce_failed_assumptions () {
   assert (!assumptions.empty ());
   while (!unsat) {
     assert (!satisfied ());
+    notify_assignments ();
     if (decide ())
       break;
     while (!unsat && !propagate ())
       analyze ();
   }
+  notify_assignments ();
   if (unsat)
     LOG ("formula is actually unsatisfiable unconditionally");
   else
@@ -663,15 +727,36 @@ int Internal::local_search () {
 
 /*------------------------------------------------------------------------*/
 
+// if preprocess_only is false and opts.ilb is true we do not preprocess
+// such that we do not have to backtrack to level 0.
+// TODO: check restore_clauses works on higher level
+//
 int Internal::solve (bool preprocess_only) {
   assert (clause.empty ());
   START (solve);
+  if (proof)
+    proof->solve_query ();
+  if (opts.ilb) {
+    if (opts.ilbassumptions)
+      sort_and_reuse_assumptions ();
+    stats.ilbtriggers++;
+    stats.ilbsuccess += (level > 0);
+    stats.levelsreused += level;
+    if (level) {
+      assert (control.size () > 1);
+      stats.literalsreused += num_assigned - control[1].trail;
+    }
+    if (external->propagator) 
+      renotify_trail_after_ilb ();
+  }
   if (preprocess_only)
     LOG ("internal solving in preprocessing only mode");
   else
     LOG ("internal solving in full mode");
   init_report_limits ();
   int res = already_solved ();
+  if (!res && preprocess_only && level)
+    backtrack ();
   if (!res)
     res = restore_clauses ();
   if (!res) {
@@ -679,17 +764,20 @@ int Internal::solve (bool preprocess_only) {
     if (!preprocess_only)
       init_search_limits ();
   }
-  if (!res)
+  if (!res && !level)
     res = preprocess ();
   if (!preprocess_only) {
-    if (!res)
+    if (!res && !level)
       res = local_search ();
-    if (!res)
+    if (!res && !level)
       res = lucky_phases ();
-    if (!res || external_prop)
+    if (!res || (res == 10 && external_prop)) {
+      if (res == 10 && external_prop && level)
+        backtrack ();
       res = cdcl_loop_with_inprocessing ();
+    }
   }
-  finalize ();
+  finalize (res);
   reset_solving ();
   report_solving (res);
   STOP (solve);
@@ -702,9 +790,9 @@ int Internal::already_solved () {
     LOG ("already inconsistent");
     res = 20;
   } else {
-    if (level)
+    if (level && !opts.ilb)
       backtrack ();
-    if (!propagate ()) {
+    if (!level && !propagate ()) {
       LOG ("root level propagation produces conflict");
       learn_empty_clause ();
       res = 20;
@@ -747,9 +835,10 @@ int Internal::restore_clauses () {
     report ('*');
   } else {
     report ('+');
+    remove_garbage_binaries ();
     external->restore_clauses ();
     internal->report ('r');
-    if (!unsat && !propagate ()) {
+    if (!unsat && !level && !propagate ()) {
       LOG ("root level propagation after restore produces conflict");
       learn_empty_clause ();
       res = 20;
@@ -763,6 +852,15 @@ int Internal::lookahead () {
   START (lookahead);
   assert (!lookingahead);
   lookingahead = true;
+  if (external_prop) {
+    if (level) {
+      // Combining lookahead with external propagator is limited
+      // Note that lookahead_probing (); would also force backtrack anyway
+      backtrack ();
+    }
+    LOG ("external notifications are turned off during preprocessing.");
+    private_steps = true;
+  }
   int tmp = already_solved ();
   if (!tmp)
     tmp = restore_clauses ();
@@ -776,23 +874,49 @@ int Internal::lookahead () {
   assert (lookingahead);
   lookingahead = false;
   STOP (lookahead);
+  if (external_prop) {
+    private_steps = false;
+    LOG("external notifications are turned back on.");
+    notify_assignments (); // In case fixed assignments were found.
+  }
   return res;
 }
 
 /*------------------------------------------------------------------------*/
 
-void Internal::finalize () {
-  if (!proof || !opts.lratfrat)
+void Internal::finalize (int res) {
+  if (!proof)
     return;
   LOG ("finalizing");
-  proof->finalize_clause (conflict_id, {});
+  // finalize external units
+  for (const auto &evar : external->vars) {
+    assert (evar > 0);
+    const auto eidx = 2 * evar;
+    int sign = 1;
+    uint64_t id = external->ext_units[eidx];
+    if (!id) {
+      sign = -1;
+      id = external->ext_units[eidx + 1];
+    }
+    if (id) {
+      proof->finalize_external_unit (id, evar * sign);
+    }
+  }
+  // finalize internal units
   for (const auto &lit : lits) {
-    // if (idx > (unsigned) max_var) break;
+    const auto elit = externalize (lit);
+    if (elit) {
+      const unsigned eidx = (elit < 0) + 2u * (unsigned) abs (elit);
+      const uint64_t id = external->ext_units[eidx];
+      if (id) {
+        assert (unit_clauses[vlit (lit)] == id);
+        continue;
+      }
+    }
     const auto uidx = vlit (lit);
     const uint64_t id = unit_clauses[uidx];
     if (!id)
       continue;
-    // const int lit = u2i (uidx);
     proof->finalize_unit (id, lit);
   }
   // See the discussion in 'propagate' on why garbage binary clauses stick
@@ -800,14 +924,24 @@ void Internal::finalize () {
   for (const auto &c : clauses)
     if (!c->garbage || c->size == 2)
       proof->finalize_clause (c);
+
+  // finalize conflict and proof
+  if (conflict_id) {
+    proof->finalize_clause (conflict_id, {});
+  }
+  proof->report_status (res, conflict_id);
+  if (res == 10)
+    external->conclude_sat ();
+  else if (res == 20)
+    conclude_unsat ();
 }
 
 /*------------------------------------------------------------------------*/
 
 void Internal::print_statistics () {
   stats.print (this);
-  if (checker)
-    checker->print_stats ();
+  for (auto &st : stat_tracers)
+    st->print_stats ();
 }
 
 /*------------------------------------------------------------------------*/
@@ -842,6 +976,34 @@ void Internal::dump () {
   fflush (stdout);
 }
 
+/*------------------------------------------------------------------------*/
+
+bool Internal::traverse_constraint (ClauseIterator &it) {
+  if (constraint.empty () && !unsat_constraint)
+    return true;
+
+  vector<int> eclause;
+  if (unsat)
+    return it.clause (eclause);
+
+  LOG (constraint, "traversing constraint");
+  bool satisfied = false;
+  for (auto ilit : constraint) {
+    const int tmp = fixed (ilit);
+    if (tmp > 0) {
+      satisfied = true;
+      break;
+    }
+    if (tmp < 0)
+      continue;
+    const int elit = externalize (ilit);
+    eclause.push_back (elit);
+  }
+  if (!satisfied && !it.clause (eclause))
+    return false;
+
+  return true;
+}
 /*------------------------------------------------------------------------*/
 
 bool Internal::traverse_clauses (ClauseIterator &it) {

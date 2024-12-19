@@ -1,8 +1,21 @@
 #!/bin/bash
 
-function msg() {
-	echo -e "\n--SMS-- build-and-install.sh: $1\n"
+
+if [ -t 1 ]; then
+	reset="\033[0m"
+	 bold="\033[1m"
+	  red="\033[91m"
+	green="\033[32m"
+fi
+
+msg() {
+	msgcol=$green
+	if [ ${2-""} = "err" ] ; then
+		msgcol=$red
+	fi
+	echo -e "\n${bold}--SMS-- build-and-install.sh:${reset}${msgcol} $1${reset}\n"
 }
+
 
 usage () {
 cat <<EOF
@@ -24,6 +37,7 @@ loc_inst=0
 CMAKE_CMD="cmake"
 CMAKE_BUILD_DIR="build"
 CMAKE_FLAGS="-B$CMAKE_BUILD_DIR -S."
+export CMAKE_BUILD_PARALLEL_LEVEL=$(nproc --all)
 CONF_FLAGS="-fPIC"
 
 CADICAL_DIR="cadical/"
@@ -58,7 +72,7 @@ fi
 
 if [ ! -f "$CADICAL_DIR/build/libcadical.a" ]; then
 	msg "Building CaDiCaL"
-	cd "$CADICAL_DIR" && ./configure $CONF_FLAGS && make -j2 && cd ..
+	cd "$CADICAL_DIR" && ./configure $CONF_FLAGS && make -j$CMAKE_BUILD_PARALLEL_LEVEL && cd ..
 fi
 
 if [ $glasgow = 1 ]; then
@@ -81,10 +95,10 @@ if [ $glasgow = 1 ]; then
 
 	msg "Building the Glasgow Subgraph Solver"
 	"$CMAKE_CMD" "-B$CMAKE_BUILD_DIR" -S.
-	if "$CMAKE_CMD" --build "$CMAKE_BUILD_DIR" -j2; then
+	if "$CMAKE_CMD" --build "$CMAKE_BUILD_DIR"; then
 		msg "Glasgow solver built successfully"
 	else
-		msg "Unable to build the Glasgow solver, exiting"
+		msg "Unable to build the Glasgow solver, exiting" "err"
 		exit 1
 	fi
 
@@ -104,10 +118,10 @@ msg "Configuring SMS build directory..."
 "$CMAKE_CMD" $CMAKE_FLAGS
 
 msg "building SMS"
-if "$CMAKE_CMD" --build "$CMAKE_BUILD_DIR" -j2; then
+if "$CMAKE_CMD" --build "$CMAKE_BUILD_DIR"; then
 	msg "SMS built successfully"
 else
-	msg "Unable to build SMS, exiting"
+	msg "Unable to build SMS, exiting" "err"
 	exit 1;
 fi
 

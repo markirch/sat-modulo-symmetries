@@ -14,11 +14,28 @@ endif()
 set(clingo_wrapper "clingoSMS.cpp")
 set(glasgow_wrapper "glasgow_wrapper.cpp")
 
-set(cadical_static_lib "${CMAKE_CURRENT_SOURCE_DIR}/../cadical/build/libcadical.a")
-link_libraries("${cadical_static_lib}")
+find_library(CADICAL_LIBRARY
+NAMES cadical
+HINTS "${CMAKE_CURRENT_SOURCE_DIR}/../cadical/build/"
+)
+if (NOT CADICAL_LIBRARY)
+	message(FATAL_ERROR "CaDiCaL not found (")
+else()
+	message("CaDiCaL found at ${CADICAL_LIBRARY}")
+endif()
+add_library(cadical STATIC IMPORTED GLOBAL)
+set_target_properties(cadical PROPERTIES IMPORTED_LOCATION ${CADICAL_LIBRARY})
+link_libraries(cadical)
 
+# cross-platform way to elevate the warning level
 # -O3 not needed, because it is implied by CMAKE_BUILD_TYPE=Release (which is the default)
-set(CMAKE_CXX_FLAGS ${CMAKE_CXX_FLAGS} "-Wall -Wextra -pedantic")
+if (MSVC)
+    # warning level 4
+    add_compile_options(/W4)
+else()
+    # additional warnings
+    add_compile_options(-Wall -Wextra -Wpedantic)
+endif()
 
 if (DEFINED CLINGO)
 	find_package(Clingo)
@@ -39,6 +56,9 @@ add_library(smsdir SHARED "minimalityCheck_dir.cpp" ${sources})
 add_library(sms_static STATIC "minimalityCheck.cpp" ${sources})
 add_library(smsdir_static STATIC "minimalityCheck_dir.cpp" ${sources})
 
+set_target_properties(sms_static PROPERTIES OUTPUT_NAME sms)
+set_target_properties(smsdir_static PROPERTIES OUTPUT_NAME smsdir)
+
 # targets must be added *after* all calls to link_libraries()
 add_executable(smsg "main.cpp")
 add_executable(smsd "main.cpp")
@@ -50,8 +70,15 @@ target_compile_definitions(smsdir_static PRIVATE DIRECTED)
 target_link_libraries(smsg PRIVATE sms_static)
 target_link_libraries(smsd PRIVATE smsdir_static)
 
-install(TARGETS smsg smsd sms smsdir sms_static smsdir_static)
-install(FILES "${cadical_static_lib}" DESTINATION lib)
+install(TARGETS
+	smsg
+	smsd
+	sms
+	smsdir
+	sms_static
+	smsdir_static
+)
+install(FILES ${CADICAL_LIBRARY} DESTINATION lib RENAME libsmscadical.a)
 install(FILES "sms.hpp" "cadical.hpp" "cadicalSMS.hpp" "useful.h" "graphChecker.hpp" "minimalityCheck.hpp" "coloringCheck.hpp" "coloring.h" DESTINATION include/sms)
 if (Clingo_FOUND)
 	install(FILES "clingoSMS.hpp" DESTINATION include/sms)

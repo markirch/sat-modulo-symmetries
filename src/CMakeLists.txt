@@ -43,10 +43,22 @@ else()
     add_compile_options(-Wall -Wextra -Wpedantic)
 endif()
 
+if (DEFINED CLINGO)
+	find_package(Clingo)
+	if (Clingo_FOUND) # only build with Clingo if the library was explicitly requested and is available
+		list(APPEND sources "${clingo_wrapper}")
+		add_compile_definitions(INCLUDE_CLINGO)
+		link_libraries(libclingo)
+		message("Linking with Clingo")
+	else()
+		message("Could not find Clingo, continuing without it")
+	endif()
+endif()
+
 
 #set_property(GLOBAL PROPERTY RULE_LAUNCH_COMPILE "time")
 
-add_library(sms SHARED  ${sources})
+add_library(sms SHARED ${sources})
 add_library(sms_static STATIC ${sources})
 
 set_target_properties(sms_static PROPERTIES OUTPUT_NAME sms)

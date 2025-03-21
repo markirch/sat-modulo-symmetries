@@ -73,6 +73,26 @@ void InducedHomomorphismResultToSubgraph(HomomorphismResult &res, forbidden_grap
         }
 }
 
+void PartialHomomorphismResultToSubgraph(HomomorphismResult &res, forbidden_graph_t &forbidden_graph, const InputGraph &H)
+{
+    int n = H.size();
+    // printf("Size of mapping: %ld\n %d %d ,%d %d, %d %d \n", res.mapping.size(), 0, res.mapping[0], 1, res.mapping[1], 2, res.mapping[2]);
+
+    for (int i = 0; i < n; i++)
+        for (int j = i + 1; j < n; j++)
+        {
+            int pi = res.mapping[i]; // check whether correct direction
+            int pj = res.mapping[j];
+            if (H.adjacent(i, j))
+            {
+                if (H.edge_label(i, j) == PRESENT_LABEL)
+                    forbidden_graph.push_back(std::make_pair(truth_value_true, std::make_pair(pi, pj)));
+                else
+                    forbidden_graph.push_back(std::make_pair(truth_value_false, std::make_pair(pi, pj)));
+            }
+        }
+}
+
 // remove low degree vertices and check connected components
 std::vector<std::vector<bool>> preprocess(const std::vector<std::vector<bool>> &G)
 {
@@ -159,11 +179,24 @@ void ForbiddenSubgraphCheckerGlasgow::checkProperty(const adjacency_matrix_t &ma
         // {
         //     continue;
         // }
+
+        // Here is seems that using defaultHomParams should give the same result.
         HomomorphismResult res = solve_homomorphism_problem(H, G2, inducedHomParams);
         if (!res.mapping.empty())
         {
             forbidden_graph_t forbidden_graph;
             InducedHomomorphismResultToSubgraph(res, forbidden_graph, H);
+            throw forbidden_graph;
+        }
+    }
+
+    for (const InputGraph &H : forbiddenPartialSubgraphsGlasgow)
+    {
+        HomomorphismResult res = solve_homomorphism_problem(H, G2, defaultHomParams);
+        if (!res.mapping.empty())
+        {
+            forbidden_graph_t forbidden_graph;
+            PartialHomomorphismResultToSubgraph(res, forbidden_graph, H);
             throw forbidden_graph;
         }
     }

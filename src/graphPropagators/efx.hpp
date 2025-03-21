@@ -4,9 +4,9 @@
  * Propagator for ensuring acyclicity in the context of EFX (envy free allocation)
  */
 
-#include "useful.h"
-#include "graphChecker.hpp"
-#include "cadical.hpp"
+#include "../useful.h"
+#include "../graphChecker.hpp"
+#include "../cadical.hpp"
 
 class EFXPropagator : public PartiallyDefinedGraphChecker
 {

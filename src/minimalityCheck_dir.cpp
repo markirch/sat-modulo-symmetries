@@ -1,50 +1,28 @@
 #include "minimalityCheck.hpp"
 
-
-int reachedCutoff = 0;
-
 // internal functions
-void isMinimal(vertex_ordering_t vertices, partition_t partition, int row, adjacency_matrix_t &adjacency_matrix, minimalit_check_config_t config, int &count);
-void isMinimalVertex(vertex_ordering_t vertices, partition_t partition, int row, adjacency_matrix_t &adjacency_matrix, minimalit_check_config_t config, int &count);
-void createClause(vertex_ordering_t &vertices, adjacency_matrix_t &adjacency_matrix, minimalit_check_config_t config);
+void isMinimalDir(vertex_ordering_t vertices, partition_t partition, int row, adjacency_matrix_t &adjacency_matrix, minimalit_check_config_t config, int &count);
+void isMinimalVertexDir(vertex_ordering_t vertices, partition_t partition, int row, adjacency_matrix_t &adjacency_matrix, minimalit_check_config_t config, int &count);
+void createClauseDir(vertex_ordering_t &vertices, adjacency_matrix_t &adjacency_matrix, minimalit_check_config_t config);
 
 // TODO replace with vector function
 int getElementFromArray(int *array, int n, int elem);
 // void checkIfPartition(vertex_ordering_t &vertices);
 
-void checkMinimality(adjacency_matrix_t &adjacency_matrix, vertex_ordering_t vertex_ordering, minimalit_check_config_t config)
+void checkMinimalityDir(adjacency_matrix_t &adjacency_matrix, vertex_ordering_t vertex_ordering, minimalit_check_config_t config)
 {
     // printf("min check\n");
     int count = 0;
-    if (MAXIMIZE_SMS)
-    {
-        adjacency_matrix_t adjacency_matrix_copy = adjacency_matrix;
-        // flip adjacent to non adjacent and vice versa
-        for (int i = 0; i < (int) adjacency_matrix.size(); i++)
-        {
-            for (int j = 0; j < (int) adjacency_matrix.size(); j++)
-            {
-                if (adjacency_matrix[i][j] == truth_value_true)
-                    adjacency_matrix_copy[i][j] = truth_value_false;
-                else if (adjacency_matrix[i][j] == truth_value_false)
-                    adjacency_matrix_copy[i][j] = truth_value_true;
-            }
-        }
-        isMinimal(vertex_ordering, config.initial_partition, 0, adjacency_matrix_copy, config, count);
-    } else {
-        isMinimal(vertex_ordering, config.initial_partition, 0, adjacency_matrix, config, count);
-    }
+    isMinimalDir(vertex_ordering, config.initial_partition, 0, adjacency_matrix, config, count);
     // printf("Number of calls %d\n", count);
 }
 
-void isMinimal(vertex_ordering_t vertices, partition_t partition, int row, adjacency_matrix_t &adjacency_matrix, minimalit_check_config_t config, int &count)
+void isMinimalDir(vertex_ordering_t vertices, partition_t partition, int row, adjacency_matrix_t &adjacency_matrix, minimalit_check_config_t config, int &count)
 {
     // PRINT_CURRENT_LINE
     count++;
     if (config.cutoff != 0 && count > config.cutoff)
     {
-
-        reachedCutoff++;
         throw LimitReachedException();
     }
 
@@ -64,12 +42,12 @@ void isMinimal(vertex_ordering_t vertices, partition_t partition, int row, adjac
         newVertices[row] = vertices[i];
         newVertices[i] = vertices[row];
 
-        isMinimalVertex(newVertices, newPartition, row, adjacency_matrix, config, count);
+        isMinimalVertexDir(newVertices, newPartition, row, adjacency_matrix, config, count);
     }
 }
 
 // Adapt the partition according the selected vertex for the row
-void isMinimalVertex(vertex_ordering_t vertices, partition_t partition, int row, adjacency_matrix_t &adjacency_matrix, minimalit_check_config_t config, int &count)
+void isMinimalVertexDir(vertex_ordering_t vertices, partition_t partition, int row, adjacency_matrix_t &adjacency_matrix, minimalit_check_config_t config, int &count)
 {
     vertex_t n = adjacency_matrix.size();
     vertex_t vertex = vertices[row];
@@ -116,7 +94,7 @@ void isMinimalVertex(vertex_ordering_t vertices, partition_t partition, int row,
                 (state == truth_value_true && statePermutation == truth_value_unknown) ||
                 (state == truth_value_true && statePermutation == truth_value_false))
             {
-                createClause(vertices, adjacency_matrix, config);
+                createClauseDir(vertices, adjacency_matrix, config);
                 col = end;
                 continue;
             }
@@ -151,7 +129,7 @@ void isMinimalVertex(vertex_ordering_t vertices, partition_t partition, int row,
         for (vertex_t i = start; i < start + (vertex_t)notAdjacentList.size(); i++)
         {
             if (adjacency_matrix[row][i] != truth_value_false)
-                createClause(vertices, adjacency_matrix, config);
+                createClauseDir(vertices, adjacency_matrix, config);
         }
 
         if (start + (vertex_t)notAdjacentList.size() < end && adjacency_matrix[row][start + notAdjacentList.size()] == truth_value_false)
@@ -161,7 +139,7 @@ void isMinimalVertex(vertex_ordering_t vertices, partition_t partition, int row,
         for (vertex_t i = start + notAdjacentList.size(); i < start + (vertex_t)(notAdjacentList.size() + unknownList.size()); i++)
         {
             if (adjacency_matrix[row][i] == truth_value_true)
-                createClause(vertices, adjacency_matrix, config);
+                createClauseDir(vertices, adjacency_matrix, config);
 
             partition[i] = 1;
 
@@ -235,7 +213,7 @@ void isMinimalVertex(vertex_ordering_t vertices, partition_t partition, int row,
                 (state == truth_value_true && statePermutation == truth_value_unknown) ||
                 (state == truth_value_true && statePermutation == truth_value_false))
             {
-                createClause(vertices, adjacency_matrix, config);
+                createClauseDir(vertices, adjacency_matrix, config);
                 col = end;
                 continue;
             }
@@ -270,7 +248,7 @@ void isMinimalVertex(vertex_ordering_t vertices, partition_t partition, int row,
         for (vertex_t i = start; i < start + (vertex_t)notAdjacentList.size(); i++)
         {
             if (adjacency_matrix[i][row] != truth_value_false)
-                createClause(vertices, adjacency_matrix, config);
+                createClauseDir(vertices, adjacency_matrix, config);
         }
 
         if (start + (vertex_t)notAdjacentList.size() < end && adjacency_matrix[start + notAdjacentList.size()][row] == truth_value_false)
@@ -280,7 +258,7 @@ void isMinimalVertex(vertex_ordering_t vertices, partition_t partition, int row,
         for (vertex_t i = start + notAdjacentList.size(); i < start + (vertex_t)(notAdjacentList.size() + unknownList.size()); i++)
         {
             if (adjacency_matrix[i][row] == truth_value_true)
-                createClause(vertices, adjacency_matrix, config);
+                createClauseDir(vertices, adjacency_matrix, config);
 
             partition[i] = 1;
 
@@ -313,21 +291,10 @@ void isMinimalVertex(vertex_ordering_t vertices, partition_t partition, int row,
         col = end;
     }
 
-    return isMinimal(vertices, partition, row + 1, adjacency_matrix, config, count);
+    return isMinimalDir(vertices, partition, row + 1, adjacency_matrix, config, count);
 }
 
-// TODO replace with vector function
-int getElementFromArray(int *array, int n, int elem)
-{
-    for (int i = 0; i < n; i++)
-    {
-        if (array[i] == elem)
-            return i;
-    }
-    return -1;
-}
-
-void createClause(vertex_ordering_t &vertices, adjacency_matrix_t &adjacency_matrix, minimalit_check_config_t)
+void createClauseDir(vertex_ordering_t &vertices, adjacency_matrix_t &adjacency_matrix, minimalit_check_config_t)
 {
     // printf("create clause\n");
     // for (int i = 0; i < adjacency_matrix.size(); i++)
@@ -371,14 +338,6 @@ void createClause(vertex_ordering_t &vertices, adjacency_matrix_t &adjacency_mat
                 minimalit_check_result_t res;
                 res.permutation = vertices;
                 res.clause = edges;
-                if (MAXIMIZE_SMS)
-                {
-                    // reverse signes of edges
-                    for (int i = 0; i < (int)edges.size(); i++)
-                    {
-                        edges[i].first = (edges[i].first == truth_value_true) ? truth_value_false : truth_value_true;
-                    }
-                }
                 throw res;
             }
 
@@ -430,23 +389,4 @@ void createClause(vertex_ordering_t &vertices, adjacency_matrix_t &adjacency_mat
         }
     }
     EXIT_UNWANTED_STATE
-}
-
-// ------------------Functions for debugging ----------------------------------
-
-// check if all vertices are contained
-// void checkIfPartition(std::vector<vertex_t> vertices)
-// {
-//     std::vector<bool> reached(vertices.size(), false);
-//     for (vertex_t i = 0; i < (vertex_t)vertices.size(); i++)
-//         reached[vertices[i]] = true; // mark each found vertex to true
-
-//     if (std::any_of(reached.begin(), reached.end(), [](auto x)
-//                     { return !x; })) // check if no doubles
-//         EXIT_UNWANTED_STATE
-// }
-
-void checkMinimalityMultiple(vector<adjacency_matrix_t> &, vertex_ordering_t, minimalit_check_config_t)
-{
-    EXIT_UNWANTED_STATE // not implemented yet
 }

@@ -7,8 +7,8 @@ With SMS, you can easily implement and solve complex graph constraints thanks to
 
 SMS contains:
 
-- the enhanced solvers `smsg` and `smsd`, based on the award-winning SAT solver [CaDiCaL](https://github.com/arminbiere/cadical), which are the engine that generates undirected and directed graphs modulo isomorphisms;
-- C++ SMS libraries (`libsms_static.a`, `libsmsdir_static.a`, `libsms.so`, `libsmsdir.so`);
+- the enhanced solvers `smsg`, based on the award-winning SAT solver [CaDiCaL](https://github.com/arminbiere/cadical), which is the engine that generates undirected and directed graphs modulo isomorphisms;
+- C++ SMS libraries (`libsms_static.a`, `libsms.so`);
 - the Python library `PySMS`, which contains a collection of pre-defined constraints and an interface to start building your own graph generation scripts;
 - a collection of examples and applications;
 - a 2QBF solver for modeling graphs with coNP properties. 
@@ -22,19 +22,24 @@ In order to build SMS, you will need the following:
 - [CMake](https://cmake.org) 3.12 or newer; and
 - to install PySMS, [pip](https://pypi.org/project/pip).
 
-A copy of [CaDiCaL](https://github.com/arminbiere/cadical) is supplied with SMS.
+A slighlty adapted version of [CaDiCaL](https://github.com/arminbiere/cadical) is supplied with SMS as a git submodule.
 
 ## Install
 
 Currently, only installation from source on Linux is officially supported.
 
 Make sure you have [Boost](https://www.boost.org/) installed.
-A copy of [CaDiCaL](https://github.com/arminbiere/cadical) is supplied (and expected) in the subdirectory `cadical`.
 Clone and enter the repository
 
 ```bash
 git clone https://github.com/markirch/sat-modulo-symmetries
 cd sat-modulo-symmetries
+```
+
+pull submodules
+
+```bash
+git submodule update --init --recursive
 ```
 
 and build SMS with:
@@ -53,8 +58,7 @@ The executables, static libraries, and required headers are automatically instal
 !!! warning
 	An earlier version of this manual recommended to first build CaDiCaL. This step is now included in `build-and-install.sh` and **should not** be performed separately. If you build CaDiCaL separately, you need to make sure it is configured with `-fPIC`.
 
-`smsg` generates undirected graphs, `smsd` is for directed graphs.
-Likewise use `libsms_static.a`, `libsms.so` to generate undirected graphs, and `libsmsdir_static.a`, `libsmsdir.so` for directed graphs.
+
 
 ## Troubleshooting
 
@@ -72,13 +76,13 @@ An example of such a task is to generate graphs with a certain maximum degree or
 
 SMS consists of two main parts:
 
-- the generation engine `smsg` (a compiled C++ binary) and its counterpart for directed graphs `smsd` (and the corresponding static and shared libraries); and
+- the generation engine `smsg` (a compiled C++ binary) and the corresponding static and shared libraries; and
 - a Python module, PySMS, which comes with a library of pre-defined constraints, and an interface to implement custom new ones.
 
 The typical workflow with SMS likewise has two steps.
 The first is to generate the desired constraints and encode them in the [DIMACS](https://www.cs.utexas.edu/users/moore/acl2/manuals/current/manual/index-seo.php/SATLINK____DIMACS) format.
 This can be achieved using the module `pysms.graph_builder`, either selecting from the predefined constraints, or implementing custom ones.
-The second is to 'solve' the constraints using `smsg` or `smsd`.
+The second is to 'solve' the constraints using `smsg`.
 For convenience, the Python module has the capacity (on by default) to directly call `smsg` and solve the constraints it produces.
 
 !!! note
@@ -125,7 +129,7 @@ and some commonly required bounds:
 - `-D|--Delta-upp` : an upper bound on the maximum degree;
 - `-d|--delta-low` : a lower bound on the minimum degree.
 
-Any unrecognized arguments will be forwarded to `smsg`/`smsd` when in solving mode (and ignored with `--no-solve`), so any options that can be set for SMS can also be used through PySMS.
+Any unrecognized arguments will be forwarded to `smsg` when in solving mode (and ignored with `--no-solve`), so any options that can be set for SMS can also be used through PySMS.
 
 !!! note
 	The legacy way of forwarding arguments to SMS via `--args-SMS` is now deprecated.
@@ -136,7 +140,7 @@ To get a complete list of all available options for the encoding builder, run
 python -m pysms.graph_builder --help
 ```
 
-For all options available for `smsg` or `smsd`, run
+For all options available for `smsg`, run
 
 ```bash
 smsg --help
@@ -211,7 +215,7 @@ See [PySMS reference](reference.md) for the full list of builtin constraints and
 
 ## Direct Usage
 
-It is possible to use `smsg` and `smsd` directly, though for them to be useful, one typically needs a set of constraints.
+It is possible to use `smsg` directly, though for them to be useful, one typically needs a set of constraints.
 As mentioned earlier, it is strongly recommended to use PySMS to prepare the constraints, although it is perfectly reasonable to store generated constraints and solve them later, or on a different machine.
 One particularly useful case is when you want to parallelize the solving of a hard problem, in which case you will likely be calling the SMS solvers directly.
 
@@ -229,12 +233,13 @@ SMS has a native interface for the two-step parallelization technique called [cu
 In the first step the problem is split into a sequence of subproblems, each represented by a partial assignment (called a _cube_).
 The behavior of this phase is controlled by the `--assignment-cutoff*` family of parameters, in particular the two below:
 
-- `--assignment-cutoff ACUTOFF` is used for cubing, if at least `ACUTOFF` edge variables are assigned and propagate is called, then a cube representing the partial assignment is generated.
-- `--assignment-cutoff-prerun-time TIME` run for this many seconds before starting cubing (applying assignment cutoff).
+- `--simple-assignment-cutoff ACUTOFF` is used for cubing, if at least `ACUTOFF` edge variables are assigned and propagate is called, then a cube representing the partial assignment is generated.
+- `--assignment-cutoff ACUTOFF` uses lookahead for picking branching variables during the cubing phase.
+- `--prerun TIME` run for this many seconds before starting cubing (applying assignment cutoff).
 
-In the seconds phase, the cubes are loaded from a file with `--cubes FILE`, and a sub-range to be solved can be picked with `--cube2solve begin end`.
+In the seconds phase, the cubes are loaded from a file with `--cube-file FILE`, and the cube to be solved `--cube-line LINENR`. The line numbers start with 1.
 
-For a complete list of all arguments call `smsg --help` and `smsd --help` respectively.
+For a complete list of all arguments call `smsg --help`.
 
 ### Edge Variable Numbering
 
@@ -271,12 +276,9 @@ smsg -v 7 --all-graphs
 Generate all non-bipartite graphs on 7 vertices (with chromatic number at least 3) and show the time spent in the minimality check, and for the coloring, which is performed by a separate propagator:
 
 ```bash
-smsg -v 7 --all-graphs --min-chromatic-number 3 --print-stats
+smsg -v 7 --all-graphs --min-chromatic-number 3 
 ```
 
 ## Solvers
 
-SMS currently requires the SAT solver [CaDiCaL](https://github.com/arminbiere/cadical), but optionally also supports [Clingo](https://potassco.org/clingo).
-`build-and-install.sh` will look for Clingo, and if finds it, it will build with Clingo support.
-Clingo can be activated with `--use-clingo`.
-Note that while SMS started with Clingo, the main development focus now goes to Cadical, and Clingo support is at the moment experimental.
+SMS currently requires the SAT solver [CaDiCaL](https://github.com/arminbiere/cadical). [Clingo](https://potassco.org/clingo) is not supported anymore.

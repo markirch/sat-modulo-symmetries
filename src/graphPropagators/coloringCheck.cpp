@@ -160,7 +160,7 @@ vector<int> HypergraphMinChromaticNumberChecker::getCliqueInIntersectionMatrix(c
     return clique;
 }
 
-#include "cadical.hpp"
+#include "../cadical.hpp"
 
 void Non010colorableChecker::checkProperty(const adjacency_matrix_t &matrix, const vector<int> &, int &)
 {
@@ -169,7 +169,7 @@ void Non010colorableChecker::checkProperty(const adjacency_matrix_t &matrix, con
     {
 
         coloring_t coloring(vertices);
-        if (get010Coloring(vertices, matrix, coloring, *triangle_stats, *edge_stats))
+        if (get010Coloring(vertices, matrix, coloring))
         {
             vector<clause_t> clauses;
 

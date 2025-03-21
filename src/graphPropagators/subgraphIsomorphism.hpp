@@ -1,9 +1,9 @@
 #ifndef SUBGRAPH_ISOMORPHISM_HPP
 #define SUBGRAPH_ISOMORPHISM_HPP
 
-#include "useful.h"
-#include "graphChecker.hpp"
-#include "cadical.hpp"
+#include "../useful.h"
+#include "../graphChecker.hpp"
+#include "../cadical.hpp"
 #include <cstring>
 
 std::pair<cnf_t, vector<vector<int>>> createEncoding(const adjacency_matrix_t &pattern, const int nt);

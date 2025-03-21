@@ -1,8 +1,8 @@
 #ifndef COLORING_CHECKER_H
 #define COLORING_CHECKER_H
 
-#include "graphChecker.hpp"
-#include "useful.h"
+#include "../graphChecker.hpp"
+#include "../useful.h"
 
 /**
  * @brief Check wether the subgraph given by the first few vertices has at least a certain chromatic number
@@ -50,7 +50,6 @@ public:
         chi = minChomaticNumber;
         this->coloringAlgo = coloringAlgo;
         this->edges = edges;
-        addsOnlyObservedLiterals = true;
         this->permuteColorings = permuteColorings;
     }
     void checkProperty(const adjacency_matrix_t &matrix, const vector<int> &, int &);
@@ -83,7 +82,6 @@ public:
         this->name = "HypergraphMinChromaticNumberChecker";
         chi = minChomaticNumber;
         this->coloringAlgo = coloringAlgo;
-        addsOnlyObservedLiterals = false; // intersection graph is not observed
         this->edges_intersection_graph = edges_intersection_graph;
         this->b_vertices[0] = b_vertices[0];
         this->b_vertices[1] = b_vertices[1];
@@ -93,23 +91,24 @@ public:
 
 class Non010colorableChecker : public ComplexFullyDefinedGraphChecker
 {
-    vector<vector<vector<int>>>& triangleVars; // the variables indicating whether certain triangles are present.
-    vector<vector<int>>& edges;
+    vector<vector<vector<int>>> triangleVars; // the variables indicating whether certain triangles are present.
+    vector<vector<int>> edges;
     bool allColorings = false;
     bool permuteColorings = false;
 
-    vector<vector<vector<int>>> *triangle_stats;
-    vector<vector<int>> *edge_stats;
+    vector<vector<vector<int>>> triangle_stats;
+    vector<vector<int>> edge_stats;
+
 
 public:
-    Non010colorableChecker(vector<vector<vector<int>>> &triangleVars, vector<vector<int>> &edges, vector<vector<vector<int>>> *triangle_stats, vector<vector<int>> *edge_stats) :
+    Non010colorableChecker(vector<vector<vector<int>>> triangleVars, vector<vector<int>> edges) :
       triangleVars (triangleVars),
       edges (edges)
     {
-        this->triangle_stats = triangle_stats;
-        this->edge_stats = edge_stats;
         this->name = "Non010colorableChecker";
-        addsOnlyObservedLiterals = false;
+        int n = (int)edges.size();
+        triangle_stats = vector<vector<vector<int>>>(n, vector<vector<int>>(n, vector<int>(n, 0)));
+        edge_stats = vector<vector<int>>(n, vector<int>(n, 0));
     }
     void checkProperty(const adjacency_matrix_t &matrix, const vector<int> &, int &);
 };
@@ -126,7 +125,6 @@ public:
     {
         this->name = "HyperColoringChecker";
         this->coloringAlgo = coloringAlgo;
-        addsOnlyObservedLiterals = false;
         this->b_vertices[0] = b_vertices[0];
         this->b_vertices[1] = b_vertices[1];
         this->edges = edges;
@@ -145,7 +143,6 @@ public:
     {
         this->name = "Greedy colorings";
         this->coloringAlgo = coloringAlgo;
-        addsOnlyObservedLiterals = false;
         this->edges = edges;
         this->chi = chi;
     }

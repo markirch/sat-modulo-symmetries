@@ -1,7 +1,7 @@
 #ifndef COLORING_H
 #define COLORING_H
 
-#include "useful.h"
+#include "../useful.h"
 
 typedef std::vector<int> coloring_t;
 typedef std::vector<vertex_t> vertex_ordering_t;
@@ -22,7 +22,7 @@ public:
     static vertex_ordering_t coloring2vertexOrdering(coloring_t &coloring);
 };
 
-int get010Coloring(int nVertices, const adjacency_matrix_t &adjacencyMatrix, coloring_t &coloring, vector<vector<vector<int>>> triangle_stats, vector<vector<int>> edge_stats);
+int get010Coloring(int nVertices, const adjacency_matrix_t &adjacencyMatrix, coloring_t &coloring);
 int getHyperColoring(int nVertices[2], const adjacency_matrix_t &matrix, vector<int> &coloring);
 vector<lit_t> get010ColoringClause(const coloring_t &coloring, int nVertices, const vector<vector<lit_t>> &E, const vector<vector<vector<lit_t>>> &T);
 vector<lit_t> getHyperColoringClause(const coloring_t &coloring, int nVertices[2], const adjacency_matrix_t &matrix, const vector<vector<lit_t>> &E);

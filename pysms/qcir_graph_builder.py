@@ -265,7 +265,7 @@ class GraphEncodingBuilder(IDPool):
         self.directed = directed
         self.V = list(range(n))
         self.n = n
-        self.paramsSMS = {"vertices": self.n, "print-stats": True, "frequency": 30, "cutoff": 20000}
+        self.paramsSMS = {"vertices": self.n, "frequency": 30, "cutoff": 20000}
         self.varEdgeTable = [[None for _ in self.V] for _ in self.V]
         self.varEdgeDirectedTable = [[None for _ in self.V] for _ in self.V]
         if directed:
@@ -1198,7 +1198,7 @@ class GraphEncodingBuilder(IDPool):
 
         sms_command = "time " if self.DEBUG else ""
         sms_command += (
-            f"{program} {python_args_SMS} {args_SMS} --qcir-file {qcirFile}"  # TODO eventually parse args_SMS to allow to override deault arguments
+            f"{program} {python_args_SMS} {args_SMS} --qcir {qcirFile}"  # TODO eventually parse args_SMS to allow to override deault arguments
         )
         for arg in forwarding_args:
             sms_command += f" '{arg}'"

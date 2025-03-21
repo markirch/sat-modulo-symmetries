@@ -1,5 +1,6 @@
-#include "minimalityCheck.hpp"
-#include "useful.h"
+#include "connectedComponents.h"
+#include "../minimalityCheck.hpp"
+
 
 using std::pair;
 using std::make_pair;

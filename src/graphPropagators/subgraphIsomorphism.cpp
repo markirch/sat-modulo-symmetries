@@ -1,5 +1,4 @@
 #include "subgraphIsomorphism.hpp"
-#include "cadical.hpp"
 #include <math.h>
 
 // currently only if target is also fully defined and non-induced

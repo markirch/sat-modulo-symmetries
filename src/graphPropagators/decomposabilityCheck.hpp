@@ -18,8 +18,8 @@
 #include <ctime>
 #include <cstdint>
 #include <map>
-#include "useful.h"
-#include "graphChecker.hpp"
+#include "../useful.h"
+#include "../graphChecker.hpp"
 #include "graphUtilities.hpp"
 
 using namespace boost;
@@ -42,7 +42,7 @@ class SpanningTreeChecker : public PartiallyDefinedGraphChecker, public GraphUti
         void checkProperty(const adjacency_matrix_t &matrix);
 };
 
-class ThreeDecomposabilityChecker : public FullyDefinedGraphChecker, public GraphUtilities
+class ThreeDecomposabilityChecker : public PartiallyDefinedGraphChecker, public GraphUtilities
 {
     private:
         bool m_full_search;
@@ -53,7 +53,8 @@ class ThreeDecomposabilityChecker : public FullyDefinedGraphChecker, public Grap
         {
             name = "ThreeDecomposabilityChecker";
             m_graph_size = graph_size;
-            m_full_search = full_search; 
+            m_full_search = full_search;
+            this->onlyCheckFinal = true;
         };
 
         ThreeDecomposabilityChecker (int graph_size, bool full_search, int iteration_count_max)

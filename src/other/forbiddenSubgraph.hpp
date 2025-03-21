@@ -1,7 +1,7 @@
 #ifndef FORBIDDEN_SUBGRAPH_H
 #define FORBIDDEN_SUBGRAPH_H
 
-#include "graphChecker.hpp"
+#include "../graphChecker.hpp"
 
 #ifdef GLASGOW
 
@@ -16,6 +16,7 @@ InputGraph toLabeledGlasgowGraph(const adjacency_matrix_t &adjacencyMatrix, int 
 
 void HomomorphismResultToSubgraph(HomomorphismResult &res, forbidden_graph_t &forbidden_graph, const InputGraph &H);
 void InducedHomomorphismResultToSubgraph(HomomorphismResult &res, forbidden_graph_t &forbidden_graph, const InputGraph &H);
+void PartialHomomorphismResultToSubgraph(HomomorphismResult &res, forbidden_graph_t &forbidden_graph, const InputGraph &H);
 
 extern HomomorphismParams defaultHomParams;
 
@@ -102,6 +103,7 @@ class ForbiddenSubgraphCheckerGlasgow : public PartiallyDefinedGraphChecker
 {
     vector<InputGraph> forbiddenSubgraphsGlasgow;
     vector<InputGraph> forbiddenInducedSubgraphsGlasgow;
+    vector<InputGraph> forbiddenPartialSubgraphsGlasgow;
 
     HomomorphismParams inducedHomParams = {
         .timeout = std::make_shared<Timeout>(0s),
@@ -110,7 +112,7 @@ class ForbiddenSubgraphCheckerGlasgow : public PartiallyDefinedGraphChecker
         .no_supplementals = true};
 
 public:
-    ForbiddenSubgraphCheckerGlasgow(int frequency, std::ifstream &forbiddenSubgraphFile, std::ifstream &forbiddenInducedSubgraphFile)
+    ForbiddenSubgraphCheckerGlasgow(int frequency, std::ifstream &forbiddenSubgraphFile, std::ifstream &forbiddenInducedSubgraphFile, std::ifstream &forbiddenPartialSubgraphFile)
     {
         // checkFinal = false;
         name = "ForbiddenSubgraphCheckerGlasgow";
@@ -123,6 +125,10 @@ public:
         if (forbiddenInducedSubgraphFile.is_open())
         {
             load_graphs(forbiddenInducedSubgraphsGlasgow, forbiddenInducedSubgraphFile, true);
+        }
+        if (forbiddenPartialSubgraphFile.is_open())
+        {
+            load_partial_graphs(forbiddenInducedSubgraphsGlasgow, forbiddenPartialSubgraphFile);
         }
     }
 
@@ -177,6 +183,41 @@ public:
             else
                 for (pair e : edges)
                     storage.back().add_edge(e.first, e.second);
+        }
+    }
+
+    void load_partial_graphs(std::vector<InputGraph> &storage, std::ifstream &graphs)
+    {
+        string line;
+        while (getline(graphs, line))
+        {
+            if (strncmp(line.c_str(), "c\t", 2) == 0)
+                continue;
+
+            std::istringstream iss(line);
+
+            string lit;
+            std::getline(iss, lit, ' ');
+            int n = stoi(lit); // first integer gives number of vertices the remaining the edges
+
+            storage.push_back(InputGraph(n, false, true)); // in the partial case we have edge labels
+
+            for (int i = 0; i < n; i++)
+                for (int j = i + 1; j < n; j++)
+                {
+                    std::getline(iss, lit, ' ');
+                    int edge = stoi(lit);
+                    if (edge == truth_value_true)
+                    {
+                        storage.back().add_directed_edge(i, j, PRESENT_LABEL);
+                        storage.back().add_directed_edge(j, i, PRESENT_LABEL);
+                    }
+                    else if (edge == truth_value_false)
+                    {
+                        storage.back().add_directed_edge(i, j, ABSENT_LABEL);
+                        storage.back().add_directed_edge(j, i, ABSENT_LABEL);
+                    }
+                }
         }
     }
 

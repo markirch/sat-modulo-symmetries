@@ -1,5 +1,5 @@
-#include "graphChecker.hpp"
-#include "cadical.hpp"
+#include "../graphChecker.hpp"
+#include "../cadical.hpp"
 #include <unordered_map>
 #include <cassert>
 

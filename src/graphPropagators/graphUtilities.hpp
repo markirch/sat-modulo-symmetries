@@ -16,7 +16,16 @@
 #include <random>
 #include <cstdint>
 #include <map>
-#include "useful.h"
+#include "../useful.h"
+
+typedef boost::adjacency_list<boost::listS, boost::vecS, boost::undirectedS, boost::property<boost::vertex_name_t, vertex_t>> boost_graph;
+typedef boost::graph_traits<boost_graph>::vertex_descriptor Vertex;
+typedef std::pair<Vertex, Vertex> Edge;
+typedef boost::property_map<boost_graph, boost::vertex_name_t>::type vertex_name_map_t;
+typedef boost::graph_traits<boost_graph>::vertex_iterator VertexIt;
+
+enum{unassigned, edge_color_green, edge_color_red, edge_color_blue};
+
 
 using namespace boost;
 using namespace std;
@@ -28,7 +37,7 @@ public:
     connected_recorder(ConnectedMap conn) : c(conn) {}
 
     template < typename Vertex, typename Graph >
-    void discover_vertex(Vertex u, const Graph& g) const
+    void discover_vertex(Vertex u, const Graph&) const
     {
         c[u] = true;
     }

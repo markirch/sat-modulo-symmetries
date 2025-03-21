@@ -2,12 +2,9 @@
 
 using std::make_pair;
 
-// only works up to 32 vertices
-
 void ConnectedChecker::checkProperty(const adjacency_matrix_t &matrix)
 {
   int n = (int)matrix.size();
-  // TODO: find connected components, ensure that at least one edge between them.
 
   vector<bool> reached(n, false);
   reached[0] = true;

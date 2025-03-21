@@ -134,7 +134,7 @@ class GraphEncodingBuilder(IDPool, list):
         self.DEBUG = DEBUG
         self.varStaticInitialPartition = None
 
-        self.paramsSMS = {"vertices": self.n, "print-stats": True}  # default params
+        self.paramsSMS = {"vertices": self.n}  # default params
 
         # order in which variables are assigned is import !!!
         if directed:
@@ -232,7 +232,9 @@ class GraphEncodingBuilder(IDPool, list):
         with open(cnfFile, "w") as cnf_fh:
             self.print_dimacs(cnf_fh)  # write script to temporary file
 
-        program = "smsd" if self.directed else "smsg"  # we expect these binaries to be on PATH
+        program ="smsg"  # we expect this binary to be on PATH
+        if self.directed:
+            program += " --directed"
 
         # add arguments
 
@@ -394,7 +396,8 @@ class GraphEncodingBuilder(IDPool, list):
             self.minConnectivity(args.connectivity_low)
 
         if args.planar_kuratowski:
-            self.paramsSMS["planar"] = 5  # DEFAULT planarity frequency
+            self.paramsSMS["planar"] = ""  
+            self.paramsSMS["planarity-frequency"] = 30 # DEFAULT planarity frequency
 
         if args.even_degrees:
             for u in self.V:
@@ -439,7 +442,7 @@ class GraphEncodingBuilder(IDPool, list):
                                 self.append([-self.var_edge(u, v)])
                             else:
                                 self.append([self.var_edge(u, v)])
-                        self.paramsSMS["fixed-subgraph-size"] = n
+                        self.paramsSMS["initial-partition"] = n * "1 " + str(self.n - n)
                         break
 
         if args.bcp:  # !!!!!!!! must be applied at the end

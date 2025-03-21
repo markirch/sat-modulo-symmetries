@@ -4,7 +4,8 @@
 #include "useful.h"
 #include "graphChecker.hpp"
 
-#define MAXIMIZE_SMS 0
+#define DEFAULT_MINIMALITY_FREQUENCY 30
+#define DEFAULT_MINIMALITY_CUTOFF 200000
 
 class LimitReachedException
 {
@@ -31,21 +32,53 @@ typedef struct
     int cutoff;
 } minimalit_check_config_t; // used for different configurations of the minimality check
 
+struct minimality_config_t
+{
+    int frequency = DEFAULT_MINIMALITY_FREQUENCY;
+    partition_t initialPartition;
+    int cutoff = DEFAULT_MINIMALITY_CUTOFF;
+    vector<vertex_ordering_t> vertexOrderings;
+    bool turnoffSMS = false;
+};
+
+inline partition_t getDefaultInitialPartition(int vertices)
+{
+    partition_t partition(vertices, false);
+    partition[0] = true;
+    return partition;
+}
+
+inline vector<vertex_ordering_t> getDefaultVertexOrderings(int vertices)
+{
+    vector<vertex_ordering_t> vertexOrderings;
+    vertex_ordering_t vertexOrdering(vertices, 0);
+    for (int i = 0; i < vertices; i++)
+        vertexOrdering[i] = i;
+    vertexOrderings.push_back(vertexOrdering);
+    return vertexOrderings;
+}
+
 /**
  * Check if graph is minimal and add a clause if this is not the case.
  * Throws std::vector<signed_edge_t> if current partially defined graph is not minimal
  * Throws LimitReachedException if cutoff limit is reached
  */
 void checkMinimality(adjacency_matrix_t &adjacency_matrix, vertex_ordering_t vertex_ordering, minimalit_check_config_t config);
+void checkMinimalityDir(adjacency_matrix_t &adjacency_matrix, vertex_ordering_t vertex_ordering, minimalit_check_config_t config);
 void checkMinimalityComplement(adjacency_matrix_t &adjacency_matrix, vertex_ordering_t vertex_ordering, minimalit_check_config_t config);
 void checkMinimalityMultiple(vector<adjacency_matrix_t> &adjacency_matrices, vertex_ordering_t vertex_ordering, minimalit_check_config_t config);
 
 // basic minimality check with potentially different initial vertexOrderings
 class MinimalityChecker : public PartiallyDefinedGraphChecker
 {
+private:
     vector<vertex_ordering_t> vertexOrderings;
     minimalit_check_config_t config;
-    FILE *symBreakClauses;
+    FILE *symBreakClauses = nullptr;
+
+    bool directed = false;
+    bool maximize = false;
+
 public:
     MinimalityChecker(int frequency, partition_t initial_partition, vector<vertex_ordering_t> vertexOrderings, int cutoff, FILE *symBreakClauses)
     {
@@ -57,8 +90,31 @@ public:
         this->symBreakClauses = symBreakClauses;
     }
 
+    MinimalityChecker(struct minimality_config_t config, int vertices, bool directed = false, bool maximize = false)
+    {
+        this->name = "MinimalityChecker";
+        this->frequency = config.frequency;
+        this->config.initial_partition = config.initialPartition;
+        this->vertexOrderings = config.vertexOrderings;
+        this->config.cutoff = config.cutoff;
+
+        // handle uninitialized values
+        if (this->config.initial_partition.empty())
+            this->config.initial_partition = getDefaultInitialPartition(vertices);
+
+        if ((int)this->config.initial_partition.size() != vertices)
+            EXIT_UNWANTED_STATE
+
+        if (this->vertexOrderings.empty())
+            this->vertexOrderings = getDefaultVertexOrderings(vertices);
+
+        this->directed = directed;
+        this->maximize = maximize;
+    }
+
     void checkProperty(const adjacency_matrix_t &matrix);
 };
+
 
 // basic minimality check with potentially different initial vertexOrderings
 class MultipleMinimalityChecker : public PartiallyDefinedMultiGraphChecker
@@ -66,6 +122,7 @@ class MultipleMinimalityChecker : public PartiallyDefinedMultiGraphChecker
     vector<vertex_ordering_t> vertexOrderings;
     minimalit_check_config_t config;
     FILE *symBreakClauses;
+
 public:
     MultipleMinimalityChecker(int frequency, partition_t initial_partition, vector<vertex_ordering_t> vertexOrderings, int cutoff, FILE *symBreakClauses)
     {
@@ -117,50 +174,5 @@ public:
 
     void checkProperty(const adjacency_matrix_t &matrix, const vector<truth_value_t> &currentAssignemnt); // { EXIT_UNWANTED_STATE }
 };
-
-/* TODO
-class MinimalityConnectedComponentChecker : public PartiallyDefinedGraphChecker
-{
-    vector<vertex_ordering_t> vertexOrderings;
-    minimalit_check_config_t config;
-
-    MinimalityConnectedComponentChecker(int frequency, partition_t initial_partition, vector<vertex_ordering_t> vertexOrderings, int cutoff)
-    {
-        this->name = "MinimalityChecker";
-        this->frequency = frequency;
-        this->config.initial_partition = initial_partition;
-        this->vertexOrderings = vertexOrderings;
-        this->config.cutoff = cutoff;
-    }
-
-    void checkProperty(const adjacency_matrix_t &matrix);
-
-    if (checkConnectedComponents) // special check
-    {
-      // check swapping paritions with same size
-      int N = intervallsColoring.size(); // last partition is only the single vertex
-      for (int i = 0; i < N; i++)
-        for (int j = i + 1; j < N; j++)
-          if (intervallsColoring[i].second - intervallsColoring[i].first == intervallsColoring[j].second - intervallsColoring[j].first)
-          {
-            // check swapping this two blocks
-            vertex_ordering_t vertex_ordering(vertices);
-            for (int i = 0; i < vertices; i++)
-            {
-              vertex_ordering[i] = i;
-            }
-
-            for (int k = 0; k < intervallsColoring[i].second - intervallsColoring[i].first; k++)
-            {
-              swap(vertex_ordering[k + intervallsColoring[i].first], vertex_ordering[k + intervallsColoring[j].first]);
-            }
-            checkMinimality(matrix, vertex_ordering, {.initial_partition = initialPartition, .cutoff = cutoff});
-          }
-
-      // check swapping connected components
-      checkSwaps(matrix);
-    }
-};
-*/
 
 #endif

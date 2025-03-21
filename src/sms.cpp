@@ -3,965 +3,636 @@
  */
 #include <cmath>
 #include "sms.hpp"
+#include "minimalityCheck.hpp"
 
-// change the number of vertices in an existing SolverConfig object this way to update all dependencies
-void SolverConfig::set_vertices(int vertices)
+GraphSolver::GraphSolver(SolverConfig config, struct minimality_config_t minimality_config) : config(config)
 {
-  this->vertices = vertices;
-  initialPartition = vector<bool>(vertices, false);
-  init_edge_vars();
-// this is a bit hacky, but it works
-// for 2 vertices there is no need for SMS because different graphs are non-isomorphic
-// so vertices == 2 serves as a signifier that we want to construct a non-SMS solver
-#ifndef DIRECTED
-  if (vertices == 2)
+  current_trail.push_back(vector<int>());
+  this->vertices = config.vertices;
+  connect_external_propagator(this);
+  connect_fixed_listener(this);
+  graphHandler = new GraphHandler(vertices, config.directed);
+  int numVariables = graphHandler->getNumVariables();
+  this->numVars = numVariables;
+  currentAssignment = vector<truth_value_t>(numVariables + 1, truth_value_unknown);
+  isFixed = vector<bool>(numVariables + 1, false);
+
+  // this->set("binary", 0);
+  // this->set("lidrup", 1);
+  // this->trace_proof("qwer");
+  // this->set("flushproof", 1);
+
+  if (config.assignmentCutoff || config.createGame)
   {
-    turnoffSMS = true;
-  }
-#endif
-}
-
-#ifndef DIRECTED
-void SolverConfig::init_edge_vars()
-{
-  observedVars.clear();
-  nextFreeVariable = 1;
-  edges = vector<vector<lit_t>>(vertices, vector<lit_t>(vertices, 0));
-  for (int i = 0; i < vertices; i++)
-    for (int j = i + 1; j < vertices; j++)
-    {
-      edges[i][j] = edges[j][i] = nextFreeVariable++;
-      observedVars.push_back(edges[i][j]);
-    }
-}
-
-#else
-
-void SolverConfig::init_edge_vars()
-{
-  observedVars.clear();
-  nextFreeVariable = 1;
-  edges = vector<vector<lit_t>>(vertices, vector<lit_t>(vertices, 0));
-  for (int i = 0; i < vertices; i++)
-  {
-    for (int j = 0; j < vertices; j++)
-    {
-      if (i == j)
-        continue;
-      edges[i][j] = nextFreeVariable++;
-      observedVars.push_back(edges[i][j]);
-    }
-  }
-}
-
-#endif
-
-#ifndef DIRECTED
-void SolverConfig::init_multi_edge_vars()
-{                                 // to be called only after init_edge_vars()
-  edgesMultiple.push_back(edges); // first level coincides with edge-variables
-  // the edges for the first layer have already been created, init the remaining layers
-  for (int x = 1; x < numberOfOverlayingGraphs; x++)
-  {
-    auto next_layer_edges = vector<vector<lit_t>>(vertices, vector<lit_t>(vertices, 0));
-    for (int i = 0; i < vertices; i++)
-      for (int j = i + 1; j < vertices; j++)
-      {
-        next_layer_edges[i][j] = next_layer_edges[j][i] = nextFreeVariable++;
-        observedVars.push_back(next_layer_edges[i][j]);
-      }
-
-    edgesMultiple.push_back(next_layer_edges);
-  }
-}
-#else
-
-void SolverConfig::init_multi_edge_vars()
-{ // to be called only after init_edge_vars()
-  // the edges for the first layer have already been created, init the remaining layers
-  for (int x = 1; x < numberOfOverlayingGraphs; x++)
-  {
-    auto next_layer_edges = vector<vector<lit_t>>(vertices, vector<lit_t>(vertices, 0));
-    for (int i = 0; i < vertices; i++)
-      for (int j = 0; j < vertices; j++)
-      {
-        if (i == j)
-          continue;
-        next_layer_edges[i][j] = nextFreeVariable++;
-        observedVars.push_back(edges[i][j]);
-      }
-
-    edgesMultiple.push_back(next_layer_edges);
-  }
-}
-#endif
-
-void SolverConfig::init_intersection_vars(int &minIntersectionVar)
-{
-  edges_intersection_graph = vector<vector<lit_t>>(b_vertices[1], vector<lit_t>(b_vertices[1], 0));
-  for (int i = 0; i < b_vertices[1]; i++)
-    for (int j = i + 1; j < b_vertices[1]; j++)
-      edges_intersection_graph[i][j] = edges_intersection_graph[j][i] = minIntersectionVar++;
-
-  nextFreeVariable = std::max(nextFreeVariable, minIntersectionVar);
-}
-
-void SolverConfig::init_triangle_vars(int triangleVars)
-{
-  triangles = vector<vector<vector<lit_t>>>(vertices, vector<vector<lit_t>>(vertices, vector<lit_t>(vertices, 0)));
-  int var = nextFreeVariable;
-  if (triangleVars)
-    var = triangleVars;
-  for (int i = 0; i < vertices; i++)
-    for (int j = i + 1; j < vertices; j++)
-      for (int k = j + 1; k < vertices; k++)
-        triangles[i][j][k] = triangles[i][k][j] =
-            triangles[j][i][k] = triangles[j][k][i] =
-                triangles[k][i][j] = triangles[k][j][i] = var++;
-
-  nextFreeVariable = std::max(var, nextFreeVariable);
-}
-
-// transform a forbidden subgraph into a clause which blocks it
-inline clause_t GraphSolver::theClauseThatBlocks(const forbidden_graph_t &fg)
-{
-  clause_t clause;
-  for (auto signedEdge : fg)
-  {
-    auto edge = signedEdge.second;
-    if (signedEdge.first == truth_value_true)
-      clause.push_back(-edges[edge.first][edge.second]);
-    else // assum that not truth_value_unknown
-      clause.push_back(edges[edge.first][edge.second]);
-  }
-  return clause;
-}
-
-adjacency_matrix_t GraphSolver::getAdjacencyMatrix()
-{
-  // printf("Trail: ");
-  // for (auto lit: *current_trail)
-  //     printf("%d ", lit);
-  // printf("\n");
-  adjacency_matrix_t matrix(vertices, vector<truth_value_t>(vertices, truth_value_unknown));
-#ifndef DIRECTED
-  for (int i = 0; i < vertices; i++)
-    for (int j = i + 1; j < vertices; j++)
-      matrix[i][j] = matrix[j][i] = currentAssignment[edges[i][j]];
-#else
-  for (int i = 0; i < vertices; i++)
-    for (int j = 0; j < vertices; j++)
-      if (i != j)
-        matrix[i][j] = currentAssignment[edges[i][j]];
-
-#endif
-  // printFullMatrix = true;
-  // printAdjacencyMatrix(matrix);
-  return matrix;
-}
-
-vector<adjacency_matrix_t> GraphSolver::getAdjacencyMatrixMultiple()
-{
-  // printf("Trail: ");
-  // for (auto lit: *current_trail)
-  //     printf("%d ", lit);
-  // printf("\n");
-  int nMatrices = config.edgesMultiple.size();
-  vector<adjacency_matrix_t> matrices(nMatrices, adjacency_matrix_t(vertices, vector<truth_value_t>(vertices, truth_value_unknown)));
-#ifndef DIRECTED
-  for (int n = 0; n < nMatrices; n++)
-    for (int i = 0; i < vertices; i++)
-      for (int j = i + 1; j < vertices; j++)
-        matrices[n][i][j] = matrices[n][j][i] = currentAssignment[config.edgesMultiple[n][i][j]];
-#else
-  EXIT_UNWANTED_STATE // not supported yet
-#endif
-  // printFullMatrix = true;
-  // printAdjacencyMatrix(matrix);
-  return matrices;
-}
-
-vector<vector<truth_value_t>> GraphSolver::getStaticPartition()
-{
-  vector<vector<truth_value_t>> partition(vertices, vector<truth_value_t>(vertices, truth_value_unknown));
-  for (int i = 0; i < vertices; i++)
-    for (int j = i + 1; j < vertices; j++)
-    {
-      partition[i][j] = partition[j][i] = currentAssignment[config.staticPartition[i][j]];
-    }
-  return partition;
-}
-
-// int cutoffCounts = 0;
-
-// returns false if a clause was added
-bool GraphSolver::cutoffFunction()
-{
-  if (config.assignmentCutoffPrerun)
-  {
-    printf("Error: not supported\n");
-    EXIT_UNWANTED_STATE
+    this->set("ilb", 1);
+    this->set("ilbassumptions", 1);
   }
 
-  if (inPrerunState)
-    return true;
+  for (int i = 1; i <= numVariables; i++)
+    add_observed_var(i);
 
-  // cutoffCounts++;
-  // if (cutoffCounts < 1000)
-  //   return true;
-  // cutoffCounts = 0;
-  return getMinimalAdjacencyMatrixAssignmentCutoff();
-
-
-  // frequency = 1; // check each time when creating cubes to add as much literals as possible
-
-  adjacency_matrix_t matrix = getAdjacencyMatrix();
-
-  if (config.assignmentScoring == COUNT_ASSIGNED)
+  if (!minimality_config.turnoffSMS)
   {
-    int nAssigned = 0;
-    for (int i = 0; i < vertices; i++)
-      for (int j = i + 1; j < vertices; j++)
-        if (matrix[i][j] != truth_value_unknown)
-          nAssigned++;
-
-#ifdef DIRECTED
-    // check other direction
-    for (int i = 0; i < vertices; i++)
-      for (int j = i + 1; j < vertices; j++)
-        if (matrix[j][i] != truth_value_unknown)
-          nAssigned++;
-#endif
-
-    if (nAssigned <= config.assignmentCutoff)
-      return true;
-  }
-  else
-  {
-#ifdef DIRECTED
-    EXIT_UNWANTED_STATE // not supported yet
-#endif
-        // score = sum log_2 ( 1 / p_e )
-        // where p_e is the empirically recorded frequency of e
-        // for balanced variables that are true half the time,
-        // the contribution towards the score is 1
-        // this is supposed to measure the search-space reduction
-        // in the number of bits
-        double assignmentScore = 0.0;
-    for (int i = 0; i < vertices; i++)
-    {
-      for (int j = i + 1; j < vertices; j++)
-      {
-        double p_inv = stats.callsCheck;
-        if (matrix[i][j] == truth_value_true)
-        {
-          if (edge_stats[i][j])
-          {
-            p_inv = p_inv / edge_stats[i][j];
-          }
-          assignmentScore += log2(p_inv);
-        }
-        else if (matrix[i][j] == truth_value_false)
-        {
-          if (edge_stats[i][j] != stats.callsCheck)
-          {
-            p_inv = p_inv / (stats.callsCheck - edge_stats[i][j]);
-          }
-          assignmentScore += log2(p_inv);
-        }
-      }
-    }
-
-    if (assignmentScore <= config.assignmentCutoff)
-    {
-      return true;
-    }
+    // add minimality checker
+    addPartiallyDefinedGraphChecker(new MinimalityChecker(minimality_config, vertices, config.directed));
   }
 
-  if (!checkPartiallyDefined(true)) // check all before creating cube
-    return false;
+  // TODO adapt on whether directed/bipartite/hypergraph ....
 
-  printf("a");
-
-#ifdef DIRECTED
-  for (int i = 0; i < vertices; i++)
-    for (int j = 0; j < vertices; j++)
-    {
-      if (i == j)
-        continue;
-      if (matrix[i][j] == truth_value_true)
-        printf(" %d", edges[i][j]);
-      if (matrix[i][j] == truth_value_false)
-        printf(" -%d", edges[i][j]);
-    }
-#else
-  for (int i = 0; i < vertices; i++)
-    for (int j = i + 1; j < vertices; j++)
-    {
-      if (matrix[i][j] == truth_value_true)
-        printf(" %d", edges[i][j]);
-      if (matrix[i][j] == truth_value_false)
-        printf(" -%d", edges[i][j]);
-    }
-
-#endif
-
-  printf("\n");
-  vector<lit_t> clause;
-
-#ifdef DIRECTED
-  for (int i = 0; i < vertices; i++)
-    for (int j = 0; j < vertices; j++)
-    {
-      if (i == j)
-        continue;
-      if (matrix[i][j] == truth_value_true)
-        clause.push_back(-edges[i][j]);
-      if (matrix[i][j] == truth_value_false)
-        clause.push_back(edges[i][j]);
-    }
-#else
-  for (int i = 0; i < vertices; i++)
-    for (int j = i + 1; j < vertices; j++)
-    {
-      if (matrix[i][j] == truth_value_true)
-        clause.push_back(-edges[i][j]);
-      if (matrix[i][j] == truth_value_false)
-        clause.push_back(edges[i][j]);
-    }
-#endif
-
-  // printf("Size %ld\n", clause.size());
-  addClause(clause, config.forgettableClauses);
-  return false;
-}
-
-bool GraphSolver::propagate()
-{
-  stats.callsPropagator++;
-
-  if (config.printPartiallyDefined && rand() % config.printPartiallyDefined == 0)
-  {
-    auto matrix = getAdjacencyMatrix();
-    printf("p\t");
-    printPartiallyDefinedAdjacencyMatrix(matrix);
-  }
-
-  auto start = clock();
-  bool res = true;
-  auto matrix = getAdjacencyMatrix();
-  res = checkPartiallyDefined(false);
-
-  if (res && config.assignmentCutoff)
-  {
-    res = cutoffFunction();
-  }
-
-  // if (checkEmbeddabilityKS && rand() % checkEmbeddabilityKS == 0)
+  // if (config.createGame || config.assignmentCutoff)
   // {
-  //   auto m = getAdjacencyMatrix();
-  //   res = testEmebeddabilityKS(m);
-  //   if (!res)
-  //   {
-  //     clause_t clause;
-  //     for (int i = 0; i < m.size(); i++)
-  //     {
-  //       for (int j = i + 1; j < m.size(); j++)
-  //       {
-  //         if (m[i][j] == truth_value_true)
-  //           clause.push_back(-edges[i][j]);
-  //       }
-  //     }
-  //     addClause(clause, false);
-  //   }
+  //   if (!this->set("ilb", 1))
+  //     EXIT_UNWANTED_STATE
+  //   if (!this->set("ilbassumptions", 1))
+  //     EXIT_UNWANTED_STATE
   // }
 
-  // if (rand() % 10000 == 0)
-  //  res = res && extractForbiddenSubgraphs(getAdjacencyMatrix());
-
-  /*if (res && hypercoloring) {
-    adjacency_matrix_t matrix = getAdjacencyMatrix();
-    bool sufficiently_populated = true;
-    for (int e = b_vertices[0]; e < vertices; e++) {
-      int e_size = 0;
-      for (int v = 0; v < b_vertices[0]; v++) {
-        if (matrix[v][e] == truth_value_true) {
-          e_size++;
-          if (e_size == 2) {
-            break;
-          }
-        }
-      }
-      if (e_size < 2) {
-        sufficiently_populated = false;
-        break;
+  if (!config.cadicalConfig.empty())
+  {
+    for (auto option : config.cadicalConfig)
+    {
+      std::cout << "Setting Cadical options '" << option << "'" << std::endl;
+      // if option is not starting with `--` then add it
+      if (option.substr(0, 2) != "--")
+        option = "--" + option;
+      if (!this->set_long_option(option.c_str()))
+      {
+        std::cerr << "invalid Cadical option '" << option << "'" << std::endl;
+        throw std::runtime_error("Invalid Cadical option");
       }
     }
-    if (sufficiently_populated) {
-      coloring_t coloring(b_vertices[0]);
-      if (getHyperColoring(b_vertices, matrix, coloring)) {
-        res = false;
-        addClause(getHyperColoringClause(coloring, b_vertices, matrix, edges), false);
-        stats.hyperclauses++;
-      }
-    }
-  }*/
-
-  stats.timePropagator += clock() - start;
-  return res;
+  }
 }
+
+// TODO be careful with fully defined graph checkers to adapt observed and increase arrays if necessary
 
 bool GraphSolver::checkPartiallyDefined(bool isFullyDefined)
 {
-  adjacency_matrix_t matrix = getAdjacencyMatrix();
+  if (inLookaheadState)
+    return true;
+
+  adjacency_matrix_t matrix = graphHandler->assignment2graph(currentAssignment);
   try
   {
+    PRINT_CURRENT_LINE
     for (auto checker : this->partiallyDefinedGraphCheckers)
       checker->check(matrix, isFullyDefined);
   }
   catch (const forbidden_graph_t forbiddenGraph)
   {
-    addClause(theClauseThatBlocks(forbiddenGraph), config.forgettableClauses); // TODO eventually vector with checkers which are redundant and which are not; only makes sense when supported by Cadical
+    addClause(graphHandler->theClauseThatBlocks(forbiddenGraph), config.redundantPropClauses);
     return false;
   }
 
-  try
+  if (!inPrerunState && config.simpleAssignmentCutoff && graphHandler->numAssigned(currentAssignment) >= config.simpleAssignmentCutoff) // TODO also check that not in prerun state
   {
-    vector<truth_value_t> curAssignment = getCurrentAssignemnt();
-    for (auto checker : this->complexPartiallyDefinedGraphCheckers)
-      checker->check(matrix, curAssignment, isFullyDefined);
-  }
-  catch (const vector<clause_t> clauses)
-  {
-    for (clause_t clause : clauses)
-      addClause(clause, config.forgettableClauses);
-    return false;
-  }
-
-  try
-  {
-    for (auto checker : this->partiallyDefinedMultiGraphCheckers)
-    {
-      checker->check(getAdjacencyMatrixMultiple(), isFullyDefined);
-    }
-  }
-  catch (const vector<forbidden_graph_t> forbiddenGraphs)
-  {
-    // trnsform forbidden subgraph into a clause, which blocks this graph
-    clause_t clause;
-    for (int i = 0; i < (int)forbiddenGraphs.size(); i++)
-    {
-      auto forbiddenGraph = forbiddenGraphs[i];
-      for (auto signedEdge : forbiddenGraph)
-      {
-        auto edge = signedEdge.second;
-        if (signedEdge.first == truth_value_true)
-        {
-          clause.push_back(-config.edgesMultiple[i][edge.first][edge.second]); // multiedges
-        }
-        else // assum that not truth_value_unknown
-        {
-          clause.push_back(config.edgesMultiple[i][edge.first][edge.second]);
-        }
-      }
-    }
-
-    addClause(clause, config.forgettableClauses); // TODO eventually vector with checkers which are redundant and which are not; only makes sense when supported by Cadical
+    addClause(graphHandler->solutionBlockingClause(currentAssignment), false);
+    graphHandler->printCube(currentAssignment);
     return false;
   }
 
   return true;
 }
 
-// returns false if graph does not satisfy a property
-bool GraphSolver::checkFullyDefinedGraph(const adjacency_matrix_t &matrix, const vector<int> &model)
+// TODO maybe only declare all the class here and give the implementation at the end, because not that important.
+
+class TimeoutTerminator : public CaDiCaL::Terminator
 {
-  try
+private:
+  int timeout;
+  clock_t start_time;
+
+public:
+  TimeoutTerminator(int timeout) : timeout(timeout)
   {
-    for (auto checker : this->fullyDefinedGraphCheckers)
-      checker->check(matrix);
-  }
-  catch (const forbidden_graph_t forbiddenGraph)
-  {
-    addClause(theClauseThatBlocks(forbiddenGraph), config.forgettableClauses); // TODO eventually vector with checkers which are redundant and which are not; only makes sense when supported by Cadical
-    return false;
+    start_time = clock();
   }
 
+  bool terminate() override
+  {
+    return ((double)clock() - start_time) / CLOCKS_PER_SEC > timeout;
+  }
+};
+
+// Allows parsing a cube file and returns the next cube (in the given range)
+class CubeReader
+{
+private:
+  std::ifstream cubeFile;
+  std::pair<int, int> cubeRange;
+  int currentLine = 1;
+
+public:
+  CubeReader(const std::string &filename, const vector<int> range, int cubeLine)
+  {
+    cubeFile.open(filename);
+    if (!cubeFile.is_open())
+    {
+      throw std::runtime_error("Could not open cube file");
+    }
+
+    if (cubeLine != 0)
+    {
+      if (!range.empty())
+        EXIT_UNWANTED_STATE
+      cubeRange = {cubeLine, cubeLine};
+    }
+    else if (range.size() == 2)
+      cubeRange = {range[0], range[1]};
+    else
+    {
+      throw std::runtime_error("Invalid range for cubes");
+    }
+
+    // ignore all lines until the first cube
+    std::string line;
+    while (currentLine != cubeRange.first)
+    {
+      currentLine++;
+      std::getline(cubeFile, line);
+    }
+  }
+
+  ~CubeReader()
+  {
+    if (cubeFile.is_open())
+    {
+      cubeFile.close();
+    }
+  }
+
+  bool hasNextCube()
+  {
+    return currentLine <= cubeRange.second && !cubeFile.eof();
+  }
+
+  std::vector<int> nextCube(int &cubeNr)
+  {
+    cubeNr = currentLine;
+    std::string line;
+    std::vector<int> cube;
+    std::getline(cubeFile, line);
+    currentLine++;
+    std::istringstream iss(line);
+    std::string lit;
+    while (iss >> lit)
+    {
+      if (lit == "a" || lit == "0")
+      {
+        continue;
+      }
+      cube.push_back(std::stoi(lit));
+    }
+
+    return cube;
+  }
+};
+
+int GraphSolver::sms_solve()
+{
+  PRINT_CURRENT_LINE
+  stats.start = clock();
+
+  if (config.prerunTime)
+  {
+    inPrerunState = true;
+    vector<int> assumptions;
+    int res = sms_main_loop(assumptions, config.prerunTime);
+    inPrerunState = false;
+
+    if (res != 0) // return value 0 means unknown
+    {
+      LOG(LOG_LEVEL_INFO, "Instance already solved during prerun");
+      return res;
+    }
+  }
+
+  if (!config.simplifiedFormulaFile.empty() || !config.learnedClausesFile.empty())
+    this->simplify(); // do some preprocessing
+
+  if (!config.simplifiedFormulaFile.empty())
+  {
+    writeSimplified(config.simplifiedFormulaFile);
+
+    if (config.learnedClausesFile.empty())
+      return 0;
+  }
+
+  if (!config.learnedClausesFile.empty())
+  {
+    writeLearnedClauses(config.learnedClausesFile);
+    return 0;
+  }
+
+  if (config.assignmentCutoff)
+  {
+    generateCubes(config.assignmentCutoff);
+    return 0;
+  }
+
+  if (config.createGame)
+  {
+    vector<int> assumptions;
+    if (!config.cubeFile.empty())
+    {
+      CubeReader r(config.cubeFile, config.cubesRange, config.cubeLine);
+
+      while (r.hasNextCube())
+      {
+        int cubeNr;
+        vector<int> assumptions = r.nextCube(cubeNr);
+        createGame(config.createGameProp, assumptions, config.createGameRecLvl);
+      }
+    }
+    else
+    {
+      createGame(config.createGameProp, vector<int>(), config.createGameRecLvl);
+    }
+    return 0;
+  }
+
+  if (!config.cubeFile.empty()) // check whether it should be solved with cubes as assumptions
+  {
+    CubeReader r(config.cubeFile, config.cubesRange, config.cubeLine);
+
+    while (r.hasNextCube())
+    {
+
+      int cubeNr;
+      vector<int> assumptions = r.nextCube(cubeNr);
+      printf("Solve cube %d\n", cubeNr);
+      // printf("Cube:");
+      // for (int lit : assumptions)
+      //   printf(" %d", lit);
+      // printf("\n");
+
+      clock_t start = clock();
+      if (sms_main_loop(assumptions, config.cubeTimeout) == 0)
+      {
+        printf("Timeout reached for solving cube\n");
+      }
+      else
+      {
+        printf("Time for cube %f\n", ((double)clock() - start) / CLOCKS_PER_SEC);
+      }
+      printStats();
+    }
+
+    printf("All cubes processed\n");
+    return 0;
+  }
+
+  vector<int> assumptions;
+  int res = sms_main_loop(assumptions, config.timeout);
+  if (res == 0)
+  {
+    LOG(LOG_LEVEL_INFO, "Instance is unknown");
+  }
+  printStats();
+
+  LOG(LOG_LEVEL_INFO, "Result: " << res);
+  return res;
+}
+
+int GraphSolver::sms_main_loop(vector<int> assumptions, int timeout)
+{
+  PRINT_CURRENT_LINE
+  TimeoutTerminator *terminator;
+  if (timeout)
+  {
+    terminator = new TimeoutTerminator(timeout);
+    this->connect_terminator(terminator);
+  }
+
+  int res;
+  do
+  {
+    // assumptions have to be added before each call of solve
+    for (int lit : assumptions)
+      CaDiCaL::Solver::assume(lit);
+    res = CaDiCaL::Solver::solve();
+    if (res == 10)
+    {
+      // check complex fully defined graph checkers
+      if (!checkIncremental())
+        continue;
+
+      if (!config.hideGraphs)
+      {
+        adjacency_matrix_t matrix = graphHandler->assignment2graph(currentAssignment); // TODO check whether crrentAssignment can really be used outside IPASIR-UP
+        graphHandler->print(matrix);
+      }
+
+      if (config.allModels)
+        blockSolution();
+      else
+        break;
+    }
+  } while (res == 10);
+
+  if (timeout)
+  {
+    this->disconnect_terminator();
+    delete terminator;
+  }
+  return res;
+}
+
+bool GraphSolver::checkIncremental()
+{
+  vector<int> model = {0};
+  for (int i = 1; i <= this->vars(); i++)
+    model.push_back(this->val(i) > 0 ? i : -i);
+
+  if (this->vars() != this->numVars)
+  {
+    LOG(LOG_LEVEL_INFO, "Number of variables in cadical doesn't coinside with the number of variables of the graph solver. All remaining variables are assumed to be true");
+    LOG(LOG_LEVEL_INFO, "Number of variables in cadical: " + std::to_string(this->vars()));
+    LOG(LOG_LEVEL_INFO, "Number of variables in graph solver: " + std::to_string(this->numVars));
+    for (int i = this->vars() + 1; i <= this->numVars; i++)
+    {
+      model.push_back(i);
+    }
+  }
+
+  bool res = true;
+
+  int nextFreeVariable = this->numVars + 1;
+  adjacency_matrix_t matrix = graphHandler->assignment2graph(currentAssignment);
   try
   {
-    vector<truth_value_t> curAssignment = getCurrentAssignemnt();
     for (auto checker : this->complexFullyDefinedGraphCheckers)
       checker->check(matrix, model, nextFreeVariable);
   }
   catch (const vector<clause_t> clauses)
   {
-    for (clause_t clause : clauses)
-      addClause(clause, config.forgettableClauses);
-    return false;
+    for (clause_t c : clauses)
+      addClause(c, false);
+
+    res = false;
   }
 
-  return true; // all checks passed
+  this->numVars = std::max(this->numVars, nextFreeVariable - 1);
+
+  return res;
 }
 
-bool GraphSolver::check()
+void GraphSolver::blockSolution()
 {
-  if (!checkPartiallyDefined(true))
-    return false;
+  adjacency_matrix_t matrix = graphHandler->assignment2graph(currentAssignment);
+  stats.nModels++;
 
-  // ----------------- all checks done for partially defined graphs -------------------------------------------
-  // printf("Start fully defined\n");
-  adjacency_matrix_t matrix = getAdjacencyMatrix();
-  stats.callsCheck++;
-  if (config.printFullyDefinedGraphs)
-  {
-    printf("Check\n");
-    fflush(stdout);
-    if (config.hypermode)
-    {
-      printHypergraph(matrix, config.b_vertices);
-    }
-    else
-    {
-      printAdjacencyMatrix(matrix, config.printFullMatrix);
-    }
-  }
-  recordGraphStats(matrix);
-  // fully defined and minimal graph
-  if (config.printIntermediateStatistic)
-  {
-    printf("Fully defined: %lld\n", stats.callsCheck);
-    printStatistics();
-  }
-
-  clock_t start = clock();
-  bool r = checkFullyDefinedGraph(matrix, *model);
-  stats.timeCheckFullGraphs += clock() - start;
-  if (!r)
-    return false;
-
-  nModels++;
-  if (!config.hideGraphs && !config.quiet)
-  {
-
-    printf("Solution %d\n", nModels);
-    if (config.numberOfOverlayingGraphs)
-    {
-      auto multiGraph = getAdjacencyMatrixMultiple();
-      int layer = 0;
-      for (auto m : multiGraph)
-      {
-        printf("Layer %d:\n", layer++);
-        printAdjacencyMatrix(m, config.printFullMatrix);
-      }
-    }
-    else if (config.hypermode)
-    {
-      printHypergraph(matrix, config.b_vertices);
-    }
-    else
-    {
-      printAdjacencyMatrix(matrix, config.printFullMatrix);
-    }
-
-    if (config.printFullModel)
-      printFullModel();
-  }
-
-  if (config.allModels)
-  {
-    // exclude current graph
-    adjacency_matrix_t &m = matrix;
-    vector<lit_t> clause;
-
-    if (config.hyperedgeColoring)
-    {
-      // forbid not just the specific hypergraph, but also its intersection graph
-      adjacency_matrix_t im = getIntersectionMatrix(matrix, config.b_vertices);
-      for (int i = 0; i < config.b_vertices[1]; i++)
-        for (int j = i + 1; j < config.b_vertices[1]; j++)
-          if (im[i][j] == truth_value_true)
-            clause.push_back(-config.edges_intersection_graph[i][j]);
-          else if (im[i][j] == truth_value_false)
-            clause.push_back(config.edges_intersection_graph[i][j]);
-          else
-            EXIT_UNWANTED_STATE
-      addClause(clause, false);
-      clause.resize(0);
-    }
-
-#ifndef DIRECTED
-    if (config.numberOfOverlayingGraphs)
-    {
-      auto multiGraph = getAdjacencyMatrixMultiple();
-      for (int a = 0; a < (int)multiGraph.size(); a++)
-        for (int i = 0; i < vertices; i++)
-          for (int j = i + 1; j < vertices; j++)
-            if (multiGraph[a][i][j] == truth_value_true)
-              clause.push_back(-config.edgesMultiple[a][i][j]);
-            else if (multiGraph[a][i][j] == truth_value_false)
-              clause.push_back(config.edgesMultiple[a][i][j]);
-            else
-              EXIT_UNWANTED_STATE
-    }
-    else
-    {
-      for (int i = 0; i < vertices; i++)
-        for (int j = i + 1; j < vertices; j++)
-          if (m[i][j] == truth_value_true)
-            clause.push_back(-edges[i][j]);
-          else if (m[i][j] == truth_value_false)
-            clause.push_back(edges[i][j]);
-          else
-            EXIT_UNWANTED_STATE
-    }
-    addClause(clause, false);
-    return false;
-#else
-    for (int i = 0; i < vertices; i++)
-      for (int j = 0; j < vertices; j++)
-        if (i == j)
-        {
-        }
-        else if (m[i][j] == truth_value_true)
-          clause.push_back(-edges[i][j]);
-        else if (m[i][j] == truth_value_false)
-          clause.push_back(edges[i][j]);
-        else
-          EXIT_UNWANTED_STATE
-    addClause(clause, false);
-    return false;
-#endif
-  }
-  return true;
+  vector<lit_t> clause = graphHandler->solutionBlockingClause(currentAssignment);
+  addClause(clause, false);
 }
 
-void GraphSolver::printStatistics()
+void GraphSolver::addClause(const vector<lit_t> &clause, bool redundant)
 {
-  if (!config.printStats)
-    return;
-  printf("Time in propagator: %f\n", ((double)stats.timePropagator) / CLOCKS_PER_SEC);
-  printf("Time in check full graphs: %f\n", ((double)stats.timeCheckFullGraphs) / CLOCKS_PER_SEC);
-  printf("Calls of check: %lld\n", stats.callsCheck);
-  printf("Calls propagator: %lld\n", stats.callsPropagator);
-  // printEdgeStats();
+  PRINT_CURRENT_LINE
 
-  vector<GraphChecker *> allCheckers;
-  allCheckers.insert(allCheckers.end(), partiallyDefinedGraphCheckers.begin(), partiallyDefinedGraphCheckers.end());
-  allCheckers.insert(allCheckers.end(), complexPartiallyDefinedGraphCheckers.begin(), complexPartiallyDefinedGraphCheckers.end());
-  allCheckers.insert(allCheckers.end(), fullyDefinedGraphCheckers.begin(), fullyDefinedGraphCheckers.end());
-  allCheckers.insert(allCheckers.end(), complexFullyDefinedGraphCheckers.begin(), complexFullyDefinedGraphCheckers.end());
-  allCheckers.insert(allCheckers.end(), partiallyDefinedMultiGraphCheckers.begin(), partiallyDefinedMultiGraphCheckers.end());
-  for (auto checker : allCheckers)
-    checker->printStats();
-}
-
-bool GraphSolver::solve()
-{
-  bool rv = false;
-  // solve
-  if (!config.quiet)
+  CaDiCaL::State s = state();
+  int isReady = s & CaDiCaL::State::READY; // means that it is not currently solving and clauses can be added normally. TODO check again
+  if (!isReady)
   {
-    printf("Starting to solve\n");
-    fflush(stdout);
-  }
-
-  initEdgeMemory();
-  if (config.non010colorable)
-    initTriangleMemory();
-
-  if (config.assignmentCutoffPrerunTime)
-  {
-    inPrerunState = true;
-    if (!config.cubeFile.empty())
-    {
-      printf("Prerun not supported for solving a cube\n");
-      exit(EXIT_FAILURE);
-    }
-    bool r = solve(config.assumptions, config.assignmentCutoffPrerunTime);
-    if (r)
-    {
-      printf("Already solved during prerun\n");
-      inPrerunState = false;
-      return true;
-    }
-    else
-    {
-      printf("Prerun finished\n");
-    }
-    inPrerunState = false;
-  }
-
-  if (config.assignmentCutoff)
-    setDefaultCubingArguments();
-
-  int cubeCounter = 0;
-  if (!config.cubeFile.empty())
-  {
-    std::ifstream is(config.cubeFile);
-    string line;
-    while (getline(is, line))
-    {
-      cubeCounter++;
-      if (config.rangeCubes.first != 0)
-      {
-        if (cubeCounter < config.rangeCubes.first)
-          continue;
-        if ((cubeCounter > config.rangeCubes.second))
-          break;
-      }
-
-      printf("Solve cube %d\n", cubeCounter);
-      vector<lit_t> assumptions; // variable names from the initial encoding
-
-      printf("%s\n", line.c_str());
-
-      std::istringstream iss(line);
-
-      string lit;
-      while (std::getline(iss, lit, ' '))
-      {
-        if (lit.empty() || lit == "a")
-          continue;
-        assumptions.push_back(stoi(lit));
-      }
-
-      clock_t start = clock();
-
-      bool solvedSuccessfully = true;
-      if (config.timeout)
-      {
-        if (!solve(assumptions, config.timeout))
-          printf("Timeout reached\n");
-      }
-      else
-      {
-        rv = solve(assumptions);
-      }
-      if (solvedSuccessfully)
-        printf("Time for cube %f\n", ((double)clock() - start) / CLOCKS_PER_SEC);
-      printStatistics();
-    }
-    printf("All cubes solved\n");
+    clauses.push_back(make_pair(clause, redundant));
   }
   else
   {
-    if (config.timeout)
-    {
-      if (!solve(config.assumptions, config.timeout))
-        printf("Timeout reached\n");
-    }
-    else
-    {
-      rv = solve(config.assumptions);
-    }
-
-    if (!config.quiet)
-    {
-      printf("Search finished\n");
-      if (config.allModels)
-        printf("Number of solutions: %d\n", nModels);
-      printStatistics();
-    }
-  }
-  return rv;
-}
-
-void GraphSolver::initEdgeMemory()
-{
-  edge_stats.resize(vertices);
-  for (int v = 0; v < vertices; v++)
-    edge_stats[v].resize(vertices, 0);
-}
-
-void GraphSolver::initTriangleMemory()
-{
-  triangle_stats.resize(vertices);
-  for (int v = 0; v < vertices; v++)
-  {
-    triangle_stats[v].resize(vertices);
-    for (int w = 0; w < vertices; w++)
-    {
-      triangle_stats[v][w].resize(vertices, 0);
-    }
+    PRINT_CURRENT_LINE
+    // use incremental interface
+    for (auto l : clause)
+      this->add(l);
+    this->add(0);
   }
 }
 
-void GraphSolver::printEdgeStats()
+//  ------------ implementation of IPASIR-UP interface ------------
+
+void GraphSolver::notify_assignment(const std::vector<int> &lits)
 {
-  printf("Edge occurrence statistics:\n");
-  for (int u = 0; u < vertices; u++)
+  for (auto lit : lits)
   {
-    for (int v = 0; v < vertices; v++)
-      printf("%4u ", edge_stats[u][v]);
-    printf("\n");
+    changeInTrail = true;
+    int absLit = abs(lit);
+    currentAssignment[absLit] = lit > 0 ? truth_value_true : truth_value_false;
+    // this->isFixed[absLit] = is_fixed;
+    current_trail.back().push_back(lit);
   }
 }
 
-/*
-static inline void greedyConstraint(clingo_propagate_control_t *ctl, int *vertexColoring, propagator_t *data)
+void GraphSolver::notify_new_decision_level()
 {
-  nColorings++;
-  // printf("START\n");
-  int colors = 4;
-  int n = data->nVertices;
-  int vertexOrdering[n];
+  current_trail.push_back(vector<int>());
 
-  int pos = 0;
-  for (int c = 0; c < colors; c++)
-    for (int i = 0; i < n; i++)
-      if (vertexColoring[i] == c)
-        vertexOrdering[pos++] = i;
+  stats.maxDepth = std::max(stats.maxDepth, (int)current_trail.size());
+  stats.summedDepth += current_trail.size();
+  stats.depthCalls++;
+}
 
-  assert(pos == n);
-
-  // coloring[i][0] denotes if vertex vertexOrdering[i] has color 0
-  clingo_literal_t coloring[n][colors];  // coloring of each vertex
-  clingo_literal_t available[n][colors]; // check if color is available, i.e., no smaller vertex in ordering has the color
-  clingo_literal_t isColored[n];         // check if vertex is colored
-  clingo_literal_t adjacentAndColorC[n][n][colors];
-
-  for (int i = 0; i < n; i++)
-  {
-    if (!clingo_propagate_control_add_literal(ctl, &isColored[i]))
-      exit(EXIT_FAILURE);
-
-    for (int c = 0; c < colors; c++)
-    {
-      if (!clingo_propagate_control_add_literal(ctl, &coloring[i][c]))
-        exit(EXIT_FAILURE);
-      if (!clingo_propagate_control_add_literal(ctl, &available[i][c]))
-        exit(EXIT_FAILURE);
-
-      for (int j = i + 1; j < n; j++)
-      {
-        if (!clingo_propagate_control_add_literal(ctl, &adjacentAndColorC[i][j][c]))
-          exit(EXIT_FAILURE);
-
-        // printf("%d\n", adjacentAndColorC[i][j][c]);
-      }
-    }
-  }
-
-  // --------------add clauses-----------
-
-  bool res;
-
-  // one color implies isColored
-  for (int i = 0; i < n; i++)
-  {
-    for (int c = 0; c < colors; c++)
-    {
-      clingo_literal_t clause[] = {-coloring[i][c], isColored[i]};
-      addClauseToBuff(clause, 2);
-    }
-  }
-
-  // at most on color
-  for (int i = 0; i < n; i++)
-  {
-    for (int c1 = 0; c1 < colors; c1++)
-    {
-      for (int c2 = c1 + 1; c2 < colors; c2++)
-      {
-        clingo_literal_t clause[] = {-coloring[i][c1], -coloring[i][c2]};
-        addClauseToBuff(clause, 2);
-      }
-    }
-  }
-
-  // at least one node is not colored
-  clingo_literal_t clause[n];
-  for (int i = 0; i < n; i++)
-    clause[i] = -isColored[i];
-  addClauseToBuff(clause, n);
-
-  // smallest available means that it should get this color
-  for (int i = 0; i < n; i++)
-  {
-    for (int c1 = 0; c1 < colors; c1++)
-    {
-      clingo_literal_t clause[colors + 2];
-      for (int c2 = 0; c2 < c1; c2++) // smaller colors
-        clause[c2] = available[i][c2];
-
-      clause[c1] = -available[i][c1];
-      clause[c1 + 1] = coloring[i][c1];
-
-      addClauseToBuff(clause, c1 + 2);
-    }
-  }
-
-  // truth_value_true and color c
-  for (int i = 0; i < n; i++)
-  {
-    for (int j = i + 1; j < n; j++)
-    {
-      for (int c = 0; c < colors; c++)
-      {
-
-        clingo_literal_t clause1[] = {coloring[i][c], -adjacentAndColorC[i][j][c]}; // not truth_value_true implies not truth_value_true and color c
-        addClauseToBuff(clause1, 2);
-
-        int v1 = MIN(vertexOrdering[i], vertexOrdering[j]);
-        int v2 = MAX(vertexOrdering[i], vertexOrdering[j]);
-        clingo_literal_t clause2[2] = {data->edgeLits[v1][v2], -adjacentAndColorC[i][j][c]}; // not truth_value_true implies not truth_value_true and color c
-        addClauseToBuff(clause2, 2);
-
-        clingo_literal_t clause3[] = {-data->edgeLits[v1][v2], -coloring[i][c], adjacentAndColorC[i][j][c]};
-        addClauseToBuff(clause3, 3);
-      }
-    }
-  }
-
-  // if no smaller vertex is truth_value_true and has color c, than color c is available.
-  for (int i = 0; i < n; i++)
-  {
-    clingo_literal_t clause[i];
-    for (int c = 0; c < colors; c++)
-    {
-      for (int j = 0; j < i; j++)
-        clause[j] = adjacentAndColorC[j][i][c];
-      clause[i] = available[i][c];
-      addClauseToBuff(clause, i + 1);
-    }
-  }
-
-  // if truth_value_true and color c than not available
-  for (int i = 0; i < n; i++)
-  {
-    for (int c = 0; c < colors; c++)
-    {
-      for (int j = 0; j < i; j++)
-      {
-        // TODO maybe use edge literals and color literals directly.
-        clingo_literal_t clause[] = {-adjacentAndColorC[j][i][c], -available[i][c]};
-        addClauseToBuff(clause, 2);
-      }
-    }
-  }
-  // fflush(stdout);
-} */
-
-void GraphSolver::recordGraphStats(const adjacency_matrix_t &matrix)
+void GraphSolver::notify_backtrack(size_t new_level)
 {
-  for (int u = 0; u < vertices; u++)
+  while (current_trail.size() > new_level + 1)
   {
-    for (int v = 0; v < vertices; v++)
+    auto last = current_trail.back();
+    for (int l : last)
     {
-      if (matrix[u][v])
-      {
-        edge_stats[u][v]++;
-        if (config.non010colorable)
-        {
-          for (int w = 0; w < vertices; w++)
-          {
-            if (matrix[u][w] && matrix[v][w])
-            {
-              triangle_stats[u][v][w]++;
-            }
-          }
-        }
-      }
+      if (!isFixed[abs(l)])
+        currentAssignment[abs(l)] = truth_value_unknown;
     }
+    current_trail.pop_back();
   }
+}
+
+// currently not checked in propagator but with the normal incremental interface to allow adding other literals or even new once.
+bool GraphSolver::cb_check_found_model(const std::vector<int> &)
+{
+  PRINT_CURRENT_LINE
+  if (!clauses.empty())
+    return false;
+
+  if (!checkPartiallyDefined(true))
+    return false;
+
+  if (config.allModels && complexFullyDefinedGraphCheckers.empty())
+  {
+    PRINT_CURRENT_LINE
+    if (!config.hideGraphs)
+    {
+      adjacency_matrix_t matrix = graphHandler->assignment2graph(currentAssignment);
+      graphHandler->print(matrix);
+    }
+
+    blockSolution();
+    return false;
+  }
+
+  return true;
+}
+
+bool GraphSolver::cb_has_external_clause(bool &redundant)
+{
+  // printf("ASDF\n");
+  // printf("Trail %ld:", current_trail.size());
+  // for (auto lits : current_trail)
+  // {
+  //   for (auto lit : lits)
+  //     printf(" %d", lit);
+  //   printf(" ; ");
+  // }
+  // printf("\n");
+
+  if (clauses.empty() && changeInTrail)
+  {
+    changeInTrail = false;
+    checkPartiallyDefined(false);
+  }
+
+  if (!clauses.empty())
+  {
+    redundant = clauses.back().second;
+    return true;
+  }
+  return false;
+}
+
+int GraphSolver::cb_add_external_clause_lit()
+{
+  vector<int> &lastClause = clauses.back().first;
+  if (lastClause.empty())
+  {
+    clauses.pop_back(); // delete last clause
+    return 0;
+  }
+  else
+  {
+    int lit = lastClause.back();
+    lastClause.pop_back();
+    return lit;
+  }
+}
+
+// --------------- statistics ---------------
+
+void GraphSolver::printStats()
+{
+  if (config.allModels)
+    printf("Number of graphs: %d\n", stats.nModels);
+
+  printf("Maximal depth: %d\n", stats.maxDepth);
+  printf("Average depth: %f\n", (double)stats.summedDepth / stats.depthCalls);
+
+  for (auto checker : this->partiallyDefinedGraphCheckers)
+    checker->printStats();
+
+  for (auto checker : this->complexFullyDefinedGraphCheckers)
+    checker->printStats();
+}
+
+// ------------------other------------------------
+
+// TODO maybe merge ExtendedClauseCounter and ExtendedClauseWriter
+
+class ExtendedClauseCounter : public CaDiCaL::ClauseIterator
+{
+public:
+  int count = 0;
+  int countRedundant = 0;
+  int countRedundantSmall = 0;
+  int maxVar = 0;
+
+  int maxRedundantClausesize = 0;
+
+  ExtendedClauseCounter(int maxRedundantClausesize = 0) : maxRedundantClausesize(maxRedundantClausesize) {}
+
+  bool redundant_clause(const std::vector<int> &c) override
+  {
+    countRedundant++;
+    if ((int)c.size() > maxRedundantClausesize)
+      return true; // skip too large learned clauses
+    countRedundantSmall++;
+    return clause(c);
+  }
+
+  bool clause(const std::vector<int> &c) override
+  {
+    count++;
+    for (auto l : c)
+      maxVar = std::max(maxVar, abs(l));
+    return true;
+  }
+};
+
+class ExtendedClauseWriter : public CaDiCaL::ClauseIterator
+{
+public:
+  FILE *file;
+  int maxRedundantClausesize = 0;
+
+  ExtendedClauseWriter(FILE *file, int maxRedundantClausesize = 0) : file(file), maxRedundantClausesize(maxRedundantClausesize) {};
+
+  bool redundant_clause(const std::vector<int> &c) override
+  {
+    if ((int)c.size() > maxRedundantClausesize)
+      return true; // skip too large learned clauses
+    return clause(c);
+  };
+
+  bool clause(const std::vector<int> &c) override
+  {
+    for (auto l : c)
+      fprintf(file, "%d ", l);
+    fprintf(file, "0\n");
+    return true;
+  };
+};
+
+class LearnedClauseWriter : public CaDiCaL::ClauseIterator
+{
+public:
+  FILE *file;
+  int maxRedundantClausesize = 5; // TODO make adaptable later
+
+  LearnedClauseWriter(FILE *file) : file(file) {};
+
+  bool redundant_clause(const std::vector<int> &c) override
+  {
+    if ((int)c.size() > maxRedundantClausesize)
+      return true; // skip too large learned clauses
+
+    for (auto l : c)
+      fprintf(file, "%d ", l);
+    fprintf(file, "0\n");
+    return true;
+  };
+
+  bool clause(const std::vector<int> &) override
+  {
+    return true; // nothing to do
+  };
+};
+
+void GraphSolver::writeSimplified(const string filename)
+{
+  ExtendedClauseCounter counter(config.maxPrintedLearnedClauseSize);
+  traverse_clauses(counter, true, true);
+
+  FILE *file = fopen(filename.c_str(), "w");
+  if (!file)
+    EXIT_UNWANTED_STATE
+  // print p cnf number_of_variables number_of_clauses
+  fprintf(file, "p cnf %d %d\n", counter.maxVar, counter.count);
+  ExtendedClauseWriter writer(file, config.maxPrintedLearnedClauseSize);
+  traverse_clauses(writer, true, true);
+  fclose(file);
+}
+
+void GraphSolver::writeLearnedClauses(const string filename)
+{
+  FILE *file = fopen(filename.c_str(), "w");
+  if (!file)
+    EXIT_UNWANTED_STATE
+  // print p cnf number_of_variables number_of_clauses
+  LearnedClauseWriter writer(file);
+  traverse_clauses(writer, true, true);
+  fclose(file);
 }

@@ -119,7 +119,7 @@ int simpleHyperColoring(const adjacency_matrix_t &adjacencyMatrix, int nVertices
 	return 0;
 }
 
-#include "cadical.hpp"
+#include "../cadical.hpp"
 /**
  * @brief Get a coloring of the graph with a SAT solver if the graph is colorable
  *
@@ -161,9 +161,9 @@ bool getColoringSAT(const adjacency_matrix_t &adjacencyMatrix, coloring_t &color
 				}
 		}
 
-	if ((int) clique.size() > maxColors)
+	if ((int)clique.size() > maxColors)
 		return false; // uncolorable if there is a large clique
-	for (int i = 0; i < (int) clique.size(); i++)
+	for (int i = 0; i < (int)clique.size(); i++)
 	{
 		solver.add(colors[clique[i]][i]);
 		solver.add(0);
@@ -189,15 +189,14 @@ bool getColoringSAT(const adjacency_matrix_t &adjacencyMatrix, coloring_t &color
 	return res == 10;
 }
 
-int simpleColoring010(const adjacency_matrix_t &adjacencyMatrix, int nVertices, coloring_t &coloring, int vertex, vector<vector<vector<int>>> &triangle_stats, vector<vector<int>> &edge_stats)
+int simpleColoring010(const adjacency_matrix_t &adjacencyMatrix, int nVertices, coloring_t &coloring, int vertex)
 {
 	if (vertex == nVertices)
 	{
 		return 1; // all vertices colored
 	}
 
-	int val[2] = {0, 1};
-	int can[2] = {1, 1};
+	int can[2] = {1, 1}; // whether it is still feasible
 
 	for (int u = 0; u < vertex && (can[0] + can[1] > 0); u++)
 	{
@@ -220,52 +219,18 @@ int simpleColoring010(const adjacency_matrix_t &adjacencyMatrix, int nVertices, 
 		}
 	}
 
-	/* count the number of vertices colored 1
-	int t = 0;
-	for (int v = 0; v < vertex; v++) {
-		t += coloring[v];
-	}*/
-
-	// an experimentally found heuristic that tends to produce a small number of colorings overall
-	/*if (vertex <= nVertices / 3 + 2 * (nVertices % 5 - nVertices % 3)) {
-		std::swap(can[0], can[1]);
-		std::swap(val[0], val[1]);
-	}*/
-
-	uint32_t cost[2] = {0, 0};
-
-	for (int v = 0; v < vertex; v++)
+	if (can[1])
 	{
-		if (coloring[v] == 0)
-		{
-			for (int w = v + 1; w < vertex; w++)
-			{
-				if (coloring[w] == 0)
-				{
-					cost[0] += triangle_stats[v][w][vertex];
-				}
-			}
-		}
-		else
-		{
-			cost[1] += edge_stats[v][vertex];
-		}
+		coloring[vertex] = 1;
+		if (simpleColoring010(adjacencyMatrix, nVertices, coloring, vertex + 1))
+			return 1;
 	}
 
-	if (cost[1] < cost[0] || (cost[1] == cost[0] && vertex * 3 <= nVertices))
+	if (can[0])
 	{
-		std::swap(can[0], can[1]);
-		std::swap(val[0], val[1]);
-	}
-
-	for (int i = 0; i < 2; i++)
-	{
-		if (can[i])
-		{
-			coloring[vertex] = val[i];
-			if (simpleColoring010(adjacencyMatrix, nVertices, coloring, vertex + 1, triangle_stats, edge_stats))
-				return 1;
-		}
+		coloring[vertex] = 0;
+		if (simpleColoring010(adjacencyMatrix, nVertices, coloring, vertex + 1))
+			return 1;
 	}
 
 	return 0;
@@ -314,7 +279,7 @@ vector<vector<int>> extractColorClasses(const coloring_t &coloring, int nVertice
 	vector<vector<int>> color_class(2);
 	for (int v = 0; v < nVertices; v++)
 	{
-		if (coloring[v] >= (int) color_class.size())
+		if (coloring[v] >= (int)color_class.size())
 		{
 			color_class.resize(coloring[v] + 1);
 		}
@@ -350,9 +315,9 @@ vector<vector<lit_t>> getHyperColoringCircuit(const coloring_t &coloring, int nV
 	return circuit;
 }
 
-int get010Coloring(int nVertices, const adjacency_matrix_t &adjacencyMatrix, coloring_t &coloring, vector<vector<vector<int>>> triangle_stats, vector<vector<int>> edge_stats)
+int get010Coloring(int nVertices, const adjacency_matrix_t &adjacencyMatrix, coloring_t &coloring)
 {
-	int colorable = simpleColoring010(adjacencyMatrix, nVertices, coloring, 0, triangle_stats, edge_stats);
+	int colorable = simpleColoring010(adjacencyMatrix, nVertices, coloring, 0);
 	num_colorings += colorable;
 	return colorable;
 }

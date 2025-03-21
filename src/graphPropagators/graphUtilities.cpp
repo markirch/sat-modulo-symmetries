@@ -66,7 +66,7 @@ bool GraphUtilities::is_connected(const boost_graph &g)
     auto nof_nodes = boost::num_vertices(g);
     std::vector<bool> connected(nof_nodes, false);
     boost::breadth_first_search(g, src, boost::visitor(record_connected(boost::make_iterator_property_map(connected.begin(), boost::get(boost::vertex_index, g)))));
-    for (int i = 1; i < nof_nodes; ++i)
+    for (int i = 1; i < (int) nof_nodes; ++i)
         if (!connected[i])
             return false;
     return true;

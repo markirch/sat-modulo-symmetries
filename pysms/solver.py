@@ -3,7 +3,7 @@
 
 import ctypes as ct
 import sys
-import pysms
+import pysms.graph_builder
 
 smslib = ct.CDLL("libsms.so")
 

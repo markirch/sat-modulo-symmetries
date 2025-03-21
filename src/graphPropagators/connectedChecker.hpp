@@ -1,10 +1,10 @@
 #ifndef _CONNECTED_CHECKER_H_
 #define _CONNECTED_CHECKER_H_
 
-#include "useful.h"
-#include "graphChecker.hpp"
+#include "../useful.h"
+#include "../graphChecker.hpp"
 
-class ConnectedChecker : public FullyDefinedGraphChecker
+class ConnectedChecker : public PartiallyDefinedGraphChecker
 {
   void checkProperty(const adjacency_matrix_t &matrix);
 
@@ -12,10 +12,11 @@ public:
   ConnectedChecker()
   {
     name = "ConnectedChecker";
+    this->onlyCheckFinal = true;
   }
 };
 
-class KConnectedChecker : public FullyDefinedGraphChecker
+class KConnectedChecker : public PartiallyDefinedGraphChecker
 {
   int k;
   // ensure that graph is at least k connected
@@ -25,6 +26,7 @@ public:
   KConnectedChecker(int k) : k(k)
   {
     name = "KConnectedChecker";
+    this->onlyCheckFinal = true;
   }
 };
 

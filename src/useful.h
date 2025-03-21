@@ -5,30 +5,40 @@
 #include <fstream>
 #include <algorithm>
 #include <cstdint>
-#include <boost/graph/adjacency_list.hpp>
-#include <boost/config.hpp>
-
-/*
-#include <algorithm>
-#include <utility>
-#include <iostream>
-#include <numeric>
 #include <string>
-#include <string.h>
-#include <cassert>
-*/
 
 using std::vector;
-//using std::pair;
+// using std::pair;
 
 typedef int lit_t;
 typedef vector<lit_t> clause_t;
 typedef vector<clause_t> cnf_t;
 typedef vector<vector<lit_t>> edge_vars_t;
 
-#define PRINT_CURRENT_LINE                            \
-    printf("Line %d, file %s\n", __LINE__, __FILE__); \
-    fflush(stdout);
+enum LogLevel
+{
+    LOG_LEVEL_INFO,
+    LOG_LEVEL_WARNING,
+    LOG_LEVEL_ERROR,
+    LOG_LEVEL_DEBUG
+};
+
+#define LOG_LEVEL LOG_LEVEL_INFO
+
+#define LOG(level, message)                  \
+    if (level <= LOG_LEVEL)            \
+    {                                        \
+        std::ostringstream oss;              \
+        oss << message;                      \
+        std::cout << oss.str() << std::endl; \
+    }
+
+#define PRINT_CURRENT_LINE                                \
+    if (LOG_LEVEL >= LOG_LEVEL_DEBUG)               \
+    {                                                     \
+        printf("Line %d, file %s, function %s\n", __LINE__, __FILE__, __func__); \
+        fflush(stdout);                                   \
+    }
 
 #define EXIT_UNWANTED_STATE                                                          \
     {                                                                                \
@@ -50,13 +60,7 @@ typedef std::vector<std::vector<truth_value_t>> adjacency_matrix_t;
 typedef std::vector<std::vector<truth_value_t>> incidence_matrix_t;
 typedef std::pair<truth_value_t, edge_t> signed_edge_t;
 
-typedef boost::adjacency_list<boost::listS, boost::vecS, boost::undirectedS, boost::property<boost::vertex_name_t, vertex_t>> boost_graph;
-typedef boost::graph_traits<boost_graph>::vertex_descriptor Vertex;
-typedef std::pair<Vertex, Vertex> Edge;
-typedef boost::property_map<boost_graph, boost::vertex_name_t>::type vertex_name_map_t;
-typedef boost::graph_traits<boost_graph>::vertex_iterator VertexIt;
-
-enum{unassigned, edge_color_green, edge_color_red, edge_color_blue};
+typedef vector<signed_edge_t> forbidden_graph_t; // forbidden graph as signed edge list.
 
 void printAdjacencyMatrix(const adjacency_matrix_t &matrix, bool printFullMatrix);
 void printPartiallyDefinedAdjacencyMatrix(const adjacency_matrix_t &matrix);

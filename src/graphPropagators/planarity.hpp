@@ -1,7 +1,7 @@
 #ifndef PLANARITY_CHECKER_H
 #define PLANARITY_CHECKER_H
 
-#include "graphChecker.hpp"
+#include "../graphChecker.hpp"
 
 // ensure that graph is planar
 class PlanarityChecker : public PartiallyDefinedGraphChecker

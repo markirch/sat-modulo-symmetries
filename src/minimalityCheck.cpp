@@ -1,7 +1,5 @@
 #include "minimalityCheck.hpp"
 
-int reachedCutoff = 0;
-
 // internal functions
 void isMinimal(vertex_ordering_t vertices, partition_t partition, int row, adjacency_matrix_t &adjacency_matrix, minimalit_check_config_t config, int &count);
 void isMinimalVertex(vertex_ordering_t vertices, partition_t partition, int row, adjacency_matrix_t &adjacency_matrix, minimalit_check_config_t config, int &count);
@@ -13,34 +11,11 @@ int getElementFromArray(int *array, int n, int elem);
 
 void checkMinimality(adjacency_matrix_t &adjacency_matrix, vertex_ordering_t vertex_ordering, minimalit_check_config_t config)
 {
-    if (MAXIMIZE_SMS)
-    {
-        auto adj_copy = adjacency_matrix; // avoid side effects by copying
-        // printf("Before:");
-        // printAdjacencyMatrix(adj_copy);
-        for (size_t i = 0; i < adjacency_matrix.size(); i++)
-            for (size_t j = 0; j < adjacency_matrix.size(); j++)
-            {
-                if (adjacency_matrix[i][j] == truth_value_false)
-                {
-                    adj_copy[i][j] = truth_value_true;
-                }
-                else if (adjacency_matrix[i][j] == truth_value_true)
-                {
-                    adj_copy[i][j] = truth_value_false;
-                }
-            }
-        // printf("Complement:");
-        // printAdjacencyMatrix(adj_copy);
-        int count = 0;
-        isMinimal(vertex_ordering, config.initial_partition, 0, adj_copy, config, count);
-    }
-    else
-    {
-        int count = 0;
-        isMinimal(vertex_ordering, config.initial_partition, 0, adjacency_matrix, config, count);
-        // printf("Number of calls %d\n", count);
-    }
+    PRINT_CURRENT_LINE
+
+    int count = 0;
+    isMinimal(vertex_ordering, config.initial_partition, 0, adjacency_matrix, config, count);
+    // printf("Number of calls %d\n", count);
 }
 
 void isMinimal(vertex_ordering_t vertices, partition_t partition, int row, adjacency_matrix_t &adjacency_matrix, minimalit_check_config_t config, int &count)
@@ -50,7 +25,6 @@ void isMinimal(vertex_ordering_t vertices, partition_t partition, int row, adjac
     if (config.cutoff != 0 && count > config.cutoff)
     {
 
-        reachedCutoff++;
         throw LimitReachedException();
     }
 
@@ -107,24 +81,6 @@ void isMinimal(vertex_ordering_t vertices, partition_t partition, int row, adjac
 // Adapt the partition according the selected vertex for the row
 void isMinimalVertex(vertex_ordering_t vertices, partition_t partition, int row, adjacency_matrix_t &adjacency_matrix, minimalit_check_config_t config, int &count)
 {
-    // for (int i = 0; i < row; i++)
-    //     printf("   ");
-    // printf("Depth: %d\n", row);
-    // for (int i = 0; i < row; i++)
-    //     printf("   ");
-    // printf("permutation: ");
-    // for (auto v : vertices)
-    //     printf("%d ", v);
-    // printf("\n");
-    // for (int i = 0; i < row; i++)
-    //     printf("   ");
-    // printf("Partition: ");
-    // for (auto b : partition)
-    //     if (b)
-    //         printf("1");
-    //     else
-    //         printf("0");
-    // printf("\n");
     vertex_t n = adjacency_matrix.size();
     vertex_t vertex = vertices[row];
     vertex_t col = row + 1; // current column
@@ -210,7 +166,6 @@ void isMinimalVertex(vertex_ordering_t vertices, partition_t partition, int row,
         // match undefined
         for (vertex_t i = start + notAdjacentList.size(); i < start + (vertex_t)(notAdjacentList.size() + unknownList.size()); i++)
         {
-            // printf("row: %d; col: %d\n", row, i);
             // PRINT_CURRENT_LINE
             if (adjacency_matrix[row][i] == truth_value_true)
             {
@@ -273,12 +228,6 @@ int getElementFromArray(int *array, int n, int elem)
 
 void createClause(vertex_ordering_t &vertices, adjacency_matrix_t &adjacency_matrix, minimalit_check_config_t)
 {
-    /*
-    printf("Add new Clause:\n");
-    printAdjacencyMatrix(adjacency_matrix);
-    for (int i = 0; i < adjacency_matrix.size(); i++)
-        printf("%d ", vertices[i]);
-    printf("\n"); */
 
     int n = adjacency_matrix.size();
     std::vector<signed_edge_t> edges;
@@ -298,23 +247,7 @@ void createClause(vertex_ordering_t &vertices, adjacency_matrix_t &adjacency_mat
                 (isAdjacentNormal == truth_value_unknown && isAdjacentPerm == truth_value_true) ||
                 (isAdjacentNormal == truth_value_unknown && isAdjacentPerm == truth_value_unknown))
             {
-                // printf("faulty %d %d:\n", i, j);
-                // printAdjacencyMatrix(adjacency_matrix);
-
-                // printf("Permutation: ");
-                // for (int i = 0; i < adjacency_matrix.size(); i++)
-                //     printf("%d ", vertices[i]);
-                // printf("\n");
-
-                // adjacency_matrix_t permAdj = adjacency_matrix;
-                // for (int i = 0; i < adjacency_matrix.size(); i++)
-                //     for (int j = i + 1; j < adjacency_matrix.size(); j++)
-                //     {
-                //         permAdj[j][i] = permAdj[i][j] = adjacency_matrix[vertices[i]][vertices[j]];
-                //     }
-                // printf("Permuted matrix:\n");
-                // printAdjacencyMatrix(permAdj);
-
+                //  no clause can be created by the give permutation
                 EXIT_UNWANTED_STATE
             }
 
@@ -326,21 +259,6 @@ void createClause(vertex_ordering_t &vertices, adjacency_matrix_t &adjacency_mat
                 edges.push_back(std::make_pair(truth_value_false, std::make_pair(i, j)));
                 edges.push_back(std::make_pair(truth_value_true, std::make_pair(vertices[i], vertices[j])));
 
-                // if (symBreakClausesFile)
-                // {
-                //     for (int i = 0; i < (int)adjacency_matrix.size(); i++)
-                //         fprintf(symBreakClausesFile, "%d ", vertices[i]);
-                //     fprintf(symBreakClausesFile, "; ");
-                // }
-                if (MAXIMIZE_SMS)
-                {
-                    // flip sign of all the edges
-                    for (size_t i = 0; i < edges.size(); i++)
-                        if (edges[i].first == truth_value_true)
-                            edges[i].first = truth_value_false;
-                        else
-                            edges[i].first = truth_value_true;
-                }
                 minimalit_check_result_t res;
                 res.permutation = vertices;
                 res.clause = edges;
@@ -353,19 +271,6 @@ void createClause(vertex_ordering_t &vertices, adjacency_matrix_t &adjacency_mat
                 edges.push_back({truth_value_true, {vertices[i], vertices[j]}});
         }
     }
-    // printf("Add new Clause:\n");
-    // printAdjacencyMatrix(adjacency_matrix);
-    // for (int i = 0; i < adjacency_matrix.size(); i++)
-    //     printf("%d ", vertices[i]);
-    // printf("\n");
-
-    // adjacency_matrix_t permAdj = adjacency_matrix;
-    // for (int i = 0; i < adjacency_matrix.size(); i++)
-    //     for (int j = i + 1; j < adjacency_matrix.size(); j++)
-    //     {
-    //         permAdj[j][i] = permAdj[i][j] = adjacency_matrix[vertices[i]][vertices[j]];
-    //     }
-    // printAdjacencyMatrix(permAdj);
 
     EXIT_UNWANTED_STATE
 }
@@ -405,7 +310,6 @@ void isMinimalMultiple(vertex_ordering_t vertices, partition_t partition, int ro
     if (config.cutoff != 0 && count > config.cutoff)
     {
 
-        reachedCutoff++;
         throw LimitReachedException();
     }
 
@@ -432,24 +336,7 @@ void isMinimalMultiple(vertex_ordering_t vertices, partition_t partition, int ro
 // Adapt the partition according the selected vertex for the row
 void isMinimalVertexMultiple(vertex_ordering_t vertices, partition_t partition, int row, vector<adjacency_matrix_t> &adjacency_matrices, minimalit_check_config_t config, int &count)
 {
-    // for (int i = 0; i < row; i++)
-    //     printf("   ");
-    // printf("Depth: %d\n", row);
-    // for (int i = 0; i < row; i++)
-    //     printf("   ");
-    // printf("permutation: ");
-    // for (auto v : vertices)
-    //     printf("%d ", v);
-    // printf("\n");
-    // for (int i = 0; i < row; i++)
-    //     printf("   ");
-    // printf("Partition: ");
-    // for (auto b : partition)
-    //     if (b)
-    //         printf("1");
-    //     else
-    //         printf("0");
-    // printf("\n");
+
     for (adjacency_matrix_t adjacency_matrix : adjacency_matrices)
     {
         vertex_t n = vertices.size();
@@ -590,12 +477,6 @@ void isMinimalVertexMultiple(vertex_ordering_t vertices, partition_t partition, 
 
 void createClauseMultiple(vertex_ordering_t &vertices, vector<adjacency_matrix_t> &adjacency_matrices, minimalit_check_config_t)
 {
-    /*
-    printf("Add new Clause:\n");
-    printAdjacencyMatrix(adjacency_matrix);
-    for (int i = 0; i < adjacency_matrix.size(); i++)
-        printf("%d ", vertices[i]);
-    printf("\n"); */
 
     int n = (int)vertices.size();
     int m = (int)adjacency_matrices.size();
@@ -619,23 +500,7 @@ void createClauseMultiple(vertex_ordering_t &vertices, vector<adjacency_matrix_t
                     (isAdjacentNormal == truth_value_unknown && isAdjacentPerm == truth_value_true) ||
                     (isAdjacentNormal == truth_value_unknown && isAdjacentPerm == truth_value_unknown))
                 {
-                    // printf("faulty %d %d:\n", i, j);
-                    // printAdjacencyMatrix(adjacency_matrix);
-
-                    // printf("Permutation: ");
-                    // for (int i = 0; i < adjacency_matrix.size(); i++)
-                    //     printf("%d ", vertices[i]);
-                    // printf("\n");
-
-                    // adjacency_matrix_t permAdj = adjacency_matrix;
-                    // for (int i = 0; i < adjacency_matrix.size(); i++)
-                    //     for (int j = i + 1; j < adjacency_matrix.size(); j++)
-                    //     {
-                    //         permAdj[j][i] = permAdj[i][j] = adjacency_matrix[vertices[i]][vertices[j]];
-                    //     }
-                    // printf("Permuted matrix:\n");
-                    // printAdjacencyMatrix(permAdj);
-
+                    // unable to create a clause given the permutation
                     EXIT_UNWANTED_STATE
                 }
 
@@ -646,22 +511,6 @@ void createClauseMultiple(vertex_ordering_t &vertices, vector<adjacency_matrix_t
                     edgesMulti[a].push_back(std::make_pair(truth_value_false, std::make_pair(i, j)));
                     edgesMulti[a].push_back(std::make_pair(truth_value_true, std::make_pair(vertices[i], vertices[j])));
 
-                    // if (symBreakClausesFile)
-                    // {
-                    //     for (int i = 0; i < (int)adjacency_matrix.size(); i++)
-                    //         fprintf(symBreakClausesFile, "%d ", vertices[i]);
-                    //     fprintf(symBreakClausesFile, "; ");
-                    // }
-                    if (MAXIMIZE_SMS)
-                    {
-                        // flip sign of all the edges
-                        for (int a = 0; a < m; a++)
-                            for (size_t i = 0; i < edgesMulti[a].size(); i++)
-                                if (edgesMulti[a][i].first == truth_value_true)
-                                    edgesMulti[a][i].first = truth_value_false;
-                                else
-                                    edgesMulti[a][i].first = truth_value_true;
-                    }
                     minimalit_check_result_multi_t res;
                     res.permutation = vertices;
                     res.clause = edgesMulti;
@@ -675,19 +524,6 @@ void createClauseMultiple(vertex_ordering_t &vertices, vector<adjacency_matrix_t
             }
         }
     }
-    // printf("Add new Clause:\n");
-    // printAdjacencyMatrix(adjacency_matrix);
-    // for (int i = 0; i < adjacency_matrix.size(); i++)
-    //     printf("%d ", vertices[i]);
-    // printf("\n");
-
-    // adjacency_matrix_t permAdj = adjacency_matrix;
-    // for (int i = 0; i < adjacency_matrix.size(); i++)
-    //     for (int j = i + 1; j < adjacency_matrix.size(); j++)
-    //     {
-    //         permAdj[j][i] = permAdj[i][j] = adjacency_matrix[vertices[i]][vertices[j]];
-    //     }
-    // printAdjacencyMatrix(permAdj);
 
     EXIT_UNWANTED_STATE
 }
@@ -720,8 +556,6 @@ void isMinimalComplement(vertex_ordering_t vertices, partition_t partition, int 
     count++;
     if (config.cutoff != 0 && count > config.cutoff)
     {
-
-        reachedCutoff++;
         throw LimitReachedException();
     }
 
@@ -747,24 +581,6 @@ void isMinimalComplement(vertex_ordering_t vertices, partition_t partition, int 
 // Adapt the partition according the selected vertex for the row
 void isMinimalVertexComplement(vertex_ordering_t vertices, partition_t partition, int row, adjacency_matrix_t &adjacency_matrix, minimalit_check_config_t config, int &count)
 {
-    // for (int i = 0; i < row; i++)
-    //     printf("   ");
-    // printf("Depth: %d\n", row);
-    // for (int i = 0; i < row; i++)
-    //     printf("   ");
-    // printf("permutation: ");
-    // for (auto v : vertices)
-    //     printf("%d ", v);
-    // printf("\n");
-    // for (int i = 0; i < row; i++)
-    //     printf("   ");
-    // printf("Partition: ");
-    // for (auto b : partition)
-    //     if (b)
-    //         printf("1");
-    //     else
-    //         printf("0");
-    // printf("\n");
     vertex_t n = adjacency_matrix.size();
     vertex_t vertex = vertices[row];
     vertex_t col = row + 1; // current column
@@ -851,7 +667,6 @@ void isMinimalVertexComplement(vertex_ordering_t vertices, partition_t partition
         // match undefined
         for (vertex_t i = start + notAdjacentList.size(); i < start + (vertex_t)(notAdjacentList.size() + unknownList.size()); i++)
         {
-            // printf("row: %d; col: %d\n", row, i);
             // PRINT_CURRENT_LINE
             if (adjacency_matrix[row][i] == truth_value_true)
             {
@@ -936,23 +751,6 @@ void createClauseComplement(vertex_ordering_t &vertices, adjacency_matrix_t &adj
                 (isAdjacentNormal == truth_value_unknown && isAdjacentPerm == truth_value_true) ||
                 (isAdjacentNormal == truth_value_unknown && isAdjacentPerm == truth_value_unknown))
             {
-                // printf("faulty %d %d:\n", i, j);
-                // printAdjacencyMatrix(adjacency_matrix);
-
-                // printf("Permutation: ");
-                // for (int i = 0; i < adjacency_matrix.size(); i++)
-                //     printf("%d ", vertices[i]);
-                // printf("\n");
-
-                // adjacency_matrix_t permAdj = adjacency_matrix;
-                // for (int i = 0; i < adjacency_matrix.size(); i++)
-                //     for (int j = i + 1; j < adjacency_matrix.size(); j++)
-                //     {
-                //         permAdj[j][i] = permAdj[i][j] = adjacency_matrix[vertices[i]][vertices[j]];
-                //     }
-                // printf("Permuted matrix:\n");
-                // printAdjacencyMatrix(permAdj);
-
                 EXIT_UNWANTED_STATE
             }
 
@@ -963,12 +761,6 @@ void createClauseComplement(vertex_ordering_t &vertices, adjacency_matrix_t &adj
                 edges.push_back(std::make_pair(truth_value_false, std::make_pair(i, j)));
                 edges.push_back(std::make_pair(truth_value_false, std::make_pair(vertices[i], vertices[j])));
 
-                // if (symBreakClausesFile)
-                // {
-                //     for (int i = 0; i < (int)adjacency_matrix.size(); i++)
-                //         fprintf(symBreakClausesFile, "%d ", vertices[i]);
-                //     fprintf(symBreakClausesFile, "; ");
-                // }
                 minimalit_check_result_t res;
                 res.permutation = vertices;
                 res.clause = edges;
@@ -981,19 +773,6 @@ void createClauseComplement(vertex_ordering_t &vertices, adjacency_matrix_t &adj
                 edges.push_back({truth_value_false, {vertices[i], vertices[j]}});
         }
     }
-    // printf("Add new Clause:\n");
-    // printAdjacencyMatrix(adjacency_matrix);
-    // for (int i = 0; i < adjacency_matrix.size(); i++)
-    //     printf("%d ", vertices[i]);
-    // printf("\n");
-
-    // adjacency_matrix_t permAdj = adjacency_matrix;
-    // for (int i = 0; i < adjacency_matrix.size(); i++)
-    //     for (int j = i + 1; j < adjacency_matrix.size(); j++)
-    //     {
-    //         permAdj[j][i] = permAdj[i][j] = adjacency_matrix[vertices[i]][vertices[j]];
-    //     }
-    // printAdjacencyMatrix(permAdj);
 
     EXIT_UNWANTED_STATE
 }

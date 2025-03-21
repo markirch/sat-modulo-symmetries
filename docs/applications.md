@@ -24,7 +24,7 @@ To solve the problem with the cubes stored in the file `cubeFile`, we use the fo
     python ./encodings/kochen_specker.py -v 22 --all-graphs --args-SMS " --cubes cubeFile --cube2solve 2390 2392 "
 ```
 
-## Erdős–Faber–Lovász conjecture
+## Erdős–Faber–Lovász conjecture ([GitHub Release v1.0.0](https://github.com/markirch/sat-modulo-symmetries/releases/tag/v1.0.0))
 
 All encodings related to the EFL Conjecture are generated and solved by the script `./encodings/efl.py`.
 The encoding is based on an incidence matrix to represent a hypergraph, i.e., the matrix indicates which vertices belong to which edge. For all details we refer to the paper ([link](https://drops.dagstuhl.de/entities/document/10.4230/LIPIcs.SAT.2023.13)).
@@ -53,7 +53,7 @@ Similar, we can check the FB Conjecture using the same script and the argument `
 ```
 
 
-## Planar graphs, Earth-Moon Problem, planar Turan Numbers and generation of OEIS integer sequences related to planar graphs
+## Planar graphs, Earth-Moon Problem, planar Turan Numbers and generation of OEIS integer sequences related to planar graphs ([GitHub Release v1.0.0](https://github.com/markirch/sat-modulo-symmetries/releases/tag/v1.0.0))
 
 To enumerate planar graphs, using different encodings, 
 use `./encodings/planar.py` with the following commands (`$n` stands for the number of vertices). The theoretical part is described in the paper "SAT-Based Generation of Planar Graphs" ([link](https://drops.dagstuhl.de/entities/document/10.4230/LIPIcs.SAT.2023.14)):
@@ -153,7 +153,7 @@ python ./pysms/graph_builder.py -v $n --num-edges-low $m --Ck-free 4 --args-SMS 
 ```
 
 
-### Earth-Moon Problem
+### Earth-Moon Problem ([GitHub Release v1.0.0](https://github.com/markirch/sat-modulo-symmetries/releases/tag/v1.0.0))
 
 
 For creating the encoding for the Earth-Moon-Problem (based on planar directed graphs), we also use the script `./encodings/planarity.py` with the argument `--earthmoon c`, where $c$ is the minimum chromatic number of the searched for graph.
@@ -176,7 +176,7 @@ Last, we can simply test whether the graph $C_5[4,4,4,4,3]$ is biplanar, using t
 ```
 
 
-## Computing small Rainbow Cycle Numbers
+## Computing small Rainbow Cycle Numbers ([GitHub Release v1.0.0](https://github.com/markirch/sat-modulo-symmetries/releases/tag/v1.0.0))
 
 For creating encodings related to computing the rainbow cycle number, we us the script `./encodings/efx.py`. The arguments `--partition-size` for the size of each block must be provided and 
 also the number of vertices must be specified. The number of blocks is computed automatically by the number of vertices and the size of the blocks. 
@@ -189,7 +189,7 @@ Adding the argument `--permutation` results in restricting the search to permuta
 For invariant pruning, we use a combination of two arguments for example `--delta-high-directed 6  --fix-first-vertex`. The first ensures that the outdegree is at most 6, the second that the first vertex cannot be permuted and it also must have outdegree exactly 6.
 
 
-## QBF Problems ### {: #qbf}
+## QBF Problems
 
 In the AAAI'25 paper [Breaking Symmetries in Quantified Graph Search: A Comparative Study](), we evaluated several QBF (quantified Boolean formulas) solvers on a collection of quantified graph search problems: where the task is to generate graphs with coNP-hard properties such as non-colorability.
 Below we explain how to install the solvers and generate the encodings from the paper.
@@ -198,7 +198,7 @@ Below we explain how to install the solvers and generate the encodings from the 
 
 The SMS package bundles a 2-QBF solver called 2Qiss.
 It is available within the `smsg` binary.
-Use `smsg --qcir-file <QCIR_FILE>` to pass a QCIR encoding, or call directly from `pysms.qcir_graph_builder`.
+Use `smsg --qcir <QCIR_FILE>` to pass a QCIR encoding, or call directly from `pysms.qcir_graph_builder`.
 
 Several other solvers support SMS.
 Follow the links and instructions found there to download and install them.

@@ -17,7 +17,6 @@ msg() {
 }
 
 
-
 usage () {
 cat <<EOF
 usage: build-and-install.sh [-h|--help][-g|--debug][-s|--glasgow][-l|--local][-c|--cmake][-p|--pip]
@@ -114,7 +113,6 @@ if [ $glasgow = 1 ]; then
 		msg "Glasgow solver built successfully"
 	else
 		msg "Unable to build the Glasgow solver, exiting" "err"
-		msg "Unable to build the Glasgow solver, exiting" "err"
 		exit 1
 	fi
 
@@ -135,10 +133,8 @@ msg "Configuring SMS build directory..."
 
 msg "building SMS"
 if "$CMAKE_CMD" --build "$CMAKE_BUILD_DIR"; then
-if "$CMAKE_CMD" --build "$CMAKE_BUILD_DIR"; then
 	msg "SMS built successfully"
 else
-	msg "Unable to build SMS, exiting" "err"
 	msg "Unable to build SMS, exiting" "err"
 	exit 1;
 fi

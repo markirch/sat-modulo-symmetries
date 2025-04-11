@@ -1,0 +1,3 @@
+[submodule "cadical_sms"]
+	path = cadical_sms
+	url = https://github.com/markirch/cadical_sms.git

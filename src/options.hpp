@@ -35,6 +35,7 @@ typedef struct
     int minAutomorphisms = 1;       // minimum required automorphisms
     int autcountCutoff = 10000;     // computational cutoff
     bool autcountAggressiveBypass = false;  // enable aggressive bypass optimizations
+    int autcountDepth = 15;         // maximum undefined edges for PDG enumeration
 } propagators_config_t;
 
 /**

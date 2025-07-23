@@ -49,6 +49,7 @@ void initOptions(SolverConfig &config, struct minimality_config_t &minimalityCon
       ("minaut", po::value<int>(&propagatorsConfig.minAutomorphisms), "Alias for --min-automorphisms")
       ("autcount-cutoff", po::value<int>(&propagatorsConfig.autcountCutoff)->default_value(10000), "Computational cutoff for automorphism counting")
       ("autcount-aggressive-bypass", po::bool_switch(&propagatorsConfig.autcountAggressiveBypass), "Enable aggressive bypass optimizations for autcount")
+      ("autcount-depth", po::value<int>(&propagatorsConfig.autcountDepth)->default_value(15), "Maximum undefined edges for PDG enumeration (safety limit)")
       ;
     
 
@@ -178,7 +179,8 @@ void addPropagators(GraphSolver *solver, const propagators_config_t &propagators
             solver->addPartiallyDefinedGraphChecker(new AutcountPDGChecker(
                 solver->config.vertices,
                 propagatorsConfig.minAutomorphisms,
-                propagatorsConfig.autcountFrequency
+                propagatorsConfig.autcountFrequency,
+                propagatorsConfig.autcountDepth
             ));
         }
     }

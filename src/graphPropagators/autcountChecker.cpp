@@ -98,8 +98,8 @@ void AutcountPDGChecker::checkProperty(const adjacency_matrix_t &matrix)
         }
     }
     
-    // PDG performance safeguard: if >15 undefined edges, be conservative and don't prune
-    if (undefined_count > 15) {
+    // PDG performance safeguard: if too many undefined edges, be conservative and don't prune
+    if (undefined_count > maxUndefinedEdges) {
         // Too many undefined edges for enumeration - assume PDG might achieve target
         // (Conservative approach: don't prune when we can't efficiently check)
         return;

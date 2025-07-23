@@ -42,14 +42,16 @@ class AutcountPDGChecker : public PartiallyDefinedGraphChecker
 private:
     AutomorphismCounter counter;
     int minAutomorphisms;
+    int maxUndefinedEdges;
     
     void checkProperty(const adjacency_matrix_t &matrix);
 
 public:
-    AutcountPDGChecker(int vertices, int minAut = 1, int frequency = DEFAULT_FREQ)
+    AutcountPDGChecker(int vertices, int minAut = 1, int frequency = DEFAULT_FREQ, int maxUndefined = 15)
         : PartiallyDefinedGraphChecker(frequency),
           counter(vertices, false),  // undirected graphs
-          minAutomorphisms(minAut)
+          minAutomorphisms(minAut),
+          maxUndefinedEdges(maxUndefined)
     {
         name = "AutcountPDGChecker";
         // This checker runs during search on partial graphs

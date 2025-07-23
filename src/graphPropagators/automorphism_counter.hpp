@@ -10,6 +10,14 @@ private:
     int vertices;
     bool directed;
     
+    // Nauty workspace members (allocated once for performance)
+    void* g;          // graph* (avoiding nauty.h include in header)
+    int* lab;
+    int* ptn; 
+    int* orbits;
+    int m;            // SETWORDSNEEDED(vertices)
+    size_t g_sz, lab_sz, ptn_sz, orbits_sz;  // For DYNFREE
+    
     // Pure C++ helper methods
     int countTrueNeighbors(const adjacency_matrix_t& matrix, vertex_t v) const;
     int countZeroNeighborVertices(const adjacency_matrix_t& matrix) const;

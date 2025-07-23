@@ -15,10 +15,27 @@ AutomorphismCounter::AutomorphismCounter(int v, bool dir)
     if (vertices <= 0) {
         throw std::invalid_argument("Vertex count must be positive");
     }
+    
+    // Allocate Nauty workspace once for performance (following Consult7 guidance)
+    m = SETWORDSNEEDED(vertices);
+    
+    // Allocate large buffers once - these are safe to reuse
+    DYNALLOC2(graph, g, g_sz, vertices, m, "malloc");
+    DYNALLOC1(int, lab, lab_sz, vertices, "malloc");
+    DYNALLOC1(int, ptn, ptn_sz, vertices, "malloc");
+    DYNALLOC1(int, orbits, orbits_sz, vertices, "malloc");
+    
+    if (!g || !lab || !ptn || !orbits) {
+        throw std::runtime_error("Failed to allocate Nauty workspace");
+    }
 }
 
 AutomorphismCounter::~AutomorphismCounter() {
-    // Clean up resources if needed
+    // Free Nauty workspace
+    DYNFREE(g, g_sz);
+    DYNFREE(lab, lab_sz);
+    DYNFREE(ptn, ptn_sz);
+    DYNFREE(orbits, orbits_sz);
 }
 
 // Simple zero 1-neighbor bypass implementation
@@ -152,23 +169,14 @@ bool AutomorphismCounter::hasAtLeastKAutomorphisms(const adjacency_matrix_t& mat
     return nautyPDGThresholdCheck(matrix, k);
 }
 
-// Nauty FDG automorphism counting
+// Nauty FDG automorphism counting (optimized with workspace reuse)
 long long AutomorphismCounter::countFDGAutomorphismsNauty(const adjacency_matrix_t& matrix) {
-    DYNALLSTAT(graph, g, g_sz);
-    DYNALLSTAT(int, lab, lab_sz);
-    DYNALLSTAT(int, ptn, ptn_sz);
-    DYNALLSTAT(int, orbits, orbits_sz);
+    // Options must be local to ensure fresh state each call (Consult7 guidance)
     static DEFAULTOPTIONS_GRAPH(options);
     statsblk stats;
     
-    int m = SETWORDSNEEDED(vertices);
-    
-    DYNALLOC2(graph, g, g_sz, vertices, m, "malloc");
-    DYNALLOC1(int, lab, lab_sz, vertices, "malloc");
-    DYNALLOC1(int, ptn, ptn_sz, vertices, "malloc");
-    DYNALLOC1(int, orbits, orbits_sz, vertices, "malloc");
-    
-    EMPTYGRAPH(g, m, vertices);
+    // Critical: Clear graph workspace before reuse to remove previous data
+    EMPTYGRAPH((graph*)g, m, vertices);
     
     // Configure options for directed vs undirected graphs
     options.getcanon = FALSE;
@@ -183,7 +191,7 @@ long long AutomorphismCounter::countFDGAutomorphismsNauty(const adjacency_matrix
         for (int i = 0; i < vertices; i++) {
             for (int j = 0; j < vertices; j++) {
                 if (i != j && matrix[i][j] == truth_value_true) {
-                    ADDONEARC(g, i, j, m);
+                    ADDONEARC((graph*)g, i, j, m);
                 }
             }
         }
@@ -192,24 +200,20 @@ long long AutomorphismCounter::countFDGAutomorphismsNauty(const adjacency_matrix
         for (int i = 0; i < vertices; i++) {
             for (int j = 0; j < vertices; j++) {
                 if (matrix[i][j] == truth_value_true) {
-                    ADDONEEDGE(g, i, j, m);
+                    ADDONEEDGE((graph*)g, i, j, m);
                 }
             }
         }
     }
     
-    densenauty(g, lab, ptn, orbits, &options, &stats, m, vertices, nullptr);
+    densenauty((graph*)g, lab, ptn, orbits, &options, &stats, m, vertices, nullptr);
     
     long long total_automorphisms = stats.grpsize1;
     for (int i = 0; i < stats.grpsize2; i++) {
         total_automorphisms *= 10;
     }
     
-    DYNFREE(g, g_sz);
-    DYNFREE(lab, lab_sz);
-    DYNFREE(ptn, ptn_sz);
-    DYNFREE(orbits, orbits_sz);
-    
+    // No DYNFREE - workspace is reused as class member
     return total_automorphisms;
 }
 

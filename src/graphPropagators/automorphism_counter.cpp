@@ -75,177 +75,11 @@ long long AutomorphismCounter::computeFactorial(int n) const {
     return result;
 }
 
-// SMS adjacency matrix to igraph conversion
-igraph_t AutomorphismCounter::convertToIgraph(const adjacency_matrix_t& matrix) {
-    igraph_t graph;
-    igraph_vector_int_t edges;
-    
-    igraph_vector_int_init(&edges, 0);
-    
-    // Check if this is a PDG (has unknown edges)
-    bool hasUnknownEdges = false;
-    for (vertex_t i = 0; i < vertices && !hasUnknownEdges; i++) {
-        for (vertex_t j = 0; j < vertices && !hasUnknownEdges; j++) {
-            if (matrix[i][j] == truth_value_unknown) {
-                hasUnknownEdges = true;
-            }
-        }
-    }
-    
-    if (hasUnknownEdges) {
-        // For PDGs: create complete clique with ALL possible edges
-        // VF2 edge compatibility callback will handle constraint checking
-        for (vertex_t i = 0; i < vertices; i++) {
-            for (vertex_t j = (directed ? 0 : i + 1); j < vertices; j++) {
-                if (i != j) {
-                    igraph_vector_int_push_back(&edges, i);
-                    igraph_vector_int_push_back(&edges, j);
-                }
-            }
-        }
-    } else {
-        // For fully-defined graphs: create actual graph structure
-        for (vertex_t i = 0; i < vertices; i++) {
-            for (vertex_t j = (directed ? 0 : i + 1); j < vertices; j++) {
-                if (i != j && matrix[i][j] == truth_value_true) {
-                    igraph_vector_int_push_back(&edges, i);
-                    igraph_vector_int_push_back(&edges, j);
-                }
-            }
-        }
-    }
-    
-    igraph_create(&graph, &edges, vertices, directed);
-    igraph_vector_int_destroy(&edges);
-    
-    return graph;
-}
-
-void AutomorphismCounter::destroyIgraph(igraph_t& graph) {
-    igraph_destroy(&graph);
-}
-
-// Static callbacks for igraph  
-igraph_error_t AutomorphismCounter::early_termination_callback(
-    const igraph_vector_int_t *map12,
-    const igraph_vector_int_t *map21, 
-    void *arg) {
-    
-    (void)map12; // Suppress unused parameter warning
-    (void)map21; // Suppress unused parameter warning
-    
-    EarlyTerminationContext* ctx = static_cast<EarlyTerminationContext*>(arg);
-    ctx->current_count++;
-    
-    if (ctx->current_count >= ctx->target_count) {
-        ctx->should_stop = true;
-        return IGRAPH_STOP; // Early termination
-    }
-    
-    return IGRAPH_SUCCESS;
-}
-
-bool AutomorphismCounter::edge_compatibility_callback(
-    const igraph_t *graph1, const igraph_t *graph2,
-    igraph_integer_t vertex1, igraph_integer_t vertex2, void *arg) {
-    
-    (void)graph1; // We'll use the stored matrices instead
-    (void)graph2;
-    
-    EarlyTerminationContext* ctx = static_cast<EarlyTerminationContext*>(arg);
-    
-    // Get truth values from SMS adjacency matrix using vertex IDs
-    truth_value_t val1 = (*ctx->matrix1)[vertex1][vertex2];  
-    truth_value_t val2 = (*ctx->matrix2)[vertex1][vertex2];  // Same for automorphism
-    
-    return areEdgesCompatible(val1, val2);
-}
-
-// VF2 early termination context for callbacks
-struct VF2EarlyTerminationContext {
-    long long target_count;
-    long long current_count;
-    const adjacency_matrix_t* matrix;
-    bool should_stop;
-};
-
-// VF2 edge compatibility callback - implements SMS PDG edge compatibility
-extern "C" igraph_bool_t vf2_edge_compatibility_callback(
-    const igraph_t* graph1, const igraph_t* graph2,
-    igraph_integer_t edge1, igraph_integer_t edge2, void* arg) {
-    
-    VF2EarlyTerminationContext* ctx = static_cast<VF2EarlyTerminationContext*>(arg);
-    
-    igraph_integer_t u1, v1, u2, v2;
-    
-    // Get vertices corresponding to edge1 in graph1
-    igraph_edge(graph1, edge1, &u1, &v1);
-    // Get vertices corresponding to edge2 in graph2
-    igraph_edge(graph2, edge2, &u2, &v2);
-    
-    // Retrieve truth values from the original adjacency matrix using the vertex indices.
-    // For automorphism, both edges come from the same matrix.
-    truth_value_t val1 = (*ctx->matrix)[u1][v1];
-    truth_value_t val2 = (*ctx->matrix)[u2][v2];
-    
-    return areEdgesCompatible(val1, val2);
-}
-
-// VF2 automorphism found callback - counts and implements early termination
-extern "C" igraph_error_t vf2_automorphism_found_callback(
-    const igraph_vector_int_t* map12, const igraph_vector_int_t* map21, void* arg) {
-    
-    (void)map12; (void)map21; // We just count for now
-    
-    VF2EarlyTerminationContext* ctx = static_cast<VF2EarlyTerminationContext*>(arg);
-    ctx->current_count++;
-    
-    // Early termination: stop if we've found enough automorphisms
-    if (ctx->current_count >= ctx->target_count) {
-        ctx->should_stop = true;
-        return IGRAPH_STOP; // Stop search
-    }
-    
-    return IGRAPH_SUCCESS; // Continue search
-}
-
-// VF2 with early termination implementation  
-bool AutomorphismCounter::vf2EarlyTermination(const adjacency_matrix_t& matrix, int k) {
-    // Convert SMS matrix to igraph
-    igraph_t graph = convertToIgraph(matrix);
-    
-    // Set up early termination context
-    VF2EarlyTerminationContext ctx;
-    ctx.target_count = k;
-    ctx.current_count = 0;
-    ctx.matrix = &matrix;
-    ctx.should_stop = false;
-    
-    // Use VF2 for automorphism counting with early termination
-    igraph_error_t result = igraph_isomorphic_function_vf2(
-        &graph, &graph,  // Same graph (automorphism)
-        nullptr, nullptr,  // No vertex colors
-        nullptr, nullptr,  // No edge colors  
-        nullptr, nullptr,  // No mapping output needed
-        vf2_automorphism_found_callback,  // Count automorphisms
-        nullptr,  // No vertex compatibility needed
-        vf2_edge_compatibility_callback,  // SMS edge compatibility
-        &ctx  // Our context
-    );
-    
-    destroyIgraph(graph);
-    
-    // IGRAPH_STOP is a valid return code when early termination is triggered
-    if (result != IGRAPH_SUCCESS && result != IGRAPH_STOP) {
-        throw std::runtime_error("VF2 automorphism search failed with unexpected error");
-    }
-    
-    // Return true if we found at least k automorphisms
-    return ctx.current_count >= k || ctx.should_stop;
-}
 
 
-// Nauty PDG automorphism counting with enumeration (replacement for VF2)
+
+
+// Nauty PDG automorphism counting with enumeration
 bool AutomorphismCounter::nautyPDGThresholdCheck(const adjacency_matrix_t& matrix, int k) {
     // Find undefined edges
     vector<std::pair<int,int>> undefined_edges;
@@ -314,11 +148,11 @@ bool AutomorphismCounter::hasAtLeastKAutomorphisms(const adjacency_matrix_t& mat
         return true;
     }
     
-    // 2. Nauty for both FDGs and PDGs (complete VF2 replacement)
+    // 2. Nauty for both FDGs and PDGs
     return nautyPDGThresholdCheck(matrix, k);
 }
 
-// Nauty FDG automorphism counting (replacement for igraph/BLISS)
+// Nauty FDG automorphism counting
 long long AutomorphismCounter::countFDGAutomorphismsNauty(const adjacency_matrix_t& matrix) {
     DYNALLSTAT(graph, g, g_sz);
     DYNALLSTAT(int, lab, lab_sz);
@@ -379,7 +213,7 @@ long long AutomorphismCounter::countFDGAutomorphismsNauty(const adjacency_matrix
     return total_automorphisms;
 }
 
-// Nauty exact counting for both FDGs and PDGs (complete VF2 replacement)
+// Nauty exact counting for both FDGs and PDGs
 long long AutomorphismCounter::countExactAutomorphisms(const adjacency_matrix_t& matrix) {
     // Find undefined edges
     vector<std::pair<int,int>> undefined_edges;

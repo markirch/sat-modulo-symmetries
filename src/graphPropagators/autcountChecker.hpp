@@ -6,7 +6,7 @@
 #include "automorphism_counter.hpp"
 
 /**
- * Automorphism counting propagator for SMS
+ * Automorphism counting propagator for SMS (final graphs only)
  * Ensures generated graphs have at least k automorphisms
  */
 class AutcountChecker : public ComplexFullyDefinedGraphChecker
@@ -30,6 +30,29 @@ public:
         // ComplexFullyDefinedGraphChecker only runs on final graphs - no frequency logic needed
         (void)cutoff;     // Suppress unused parameter warning
         (void)aggressive; // Suppress unused parameter warning
+    }
+};
+
+/**
+ * Automorphism counting propagator for SMS (partial graphs during search)
+ * Prunes search space when PDGs cannot achieve minimum automorphisms
+ */
+class AutcountPDGChecker : public PartiallyDefinedGraphChecker
+{
+private:
+    AutomorphismCounter counter;
+    int minAutomorphisms;
+    
+    void checkProperty(const adjacency_matrix_t &matrix);
+
+public:
+    AutcountPDGChecker(int vertices, int minAut = 1, int frequency = DEFAULT_FREQ)
+        : PartiallyDefinedGraphChecker(frequency),
+          counter(vertices, false),  // undirected graphs
+          minAutomorphisms(minAut)
+    {
+        name = "AutcountPDGChecker";
+        // This checker runs during search on partial graphs
     }
 };
 

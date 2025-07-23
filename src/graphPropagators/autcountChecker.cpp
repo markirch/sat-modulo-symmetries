@@ -81,3 +81,66 @@ void AutcountChecker::checkProperty(const adjacency_matrix_t &buggy_matrix, cons
         throw clauses;
     }
 }
+
+void AutcountPDGChecker::checkProperty(const adjacency_matrix_t &matrix)
+{
+    // For PDGs, check if ANY possible FDG completion can achieve minAutomorphisms
+    // First check if the PDG has too many undefined edges for practical enumeration
+    
+    // Count undefined edges
+    int undefined_count = 0;
+    int n = matrix.size();
+    for (int i = 0; i < n; ++i) {
+        for (int j = i + 1; j < n; ++j) {
+            if (matrix[i][j] == truth_value_unknown) {
+                undefined_count++;
+            }
+        }
+    }
+    
+    // PDG performance safeguard: if >15 undefined edges, be conservative and don't prune
+    if (undefined_count > 15) {
+        // Too many undefined edges for enumeration - assume PDG might achieve target
+        // (Conservative approach: don't prune when we can't efficiently check)
+        return;
+    }
+    
+    try {
+        bool canAchieveTarget = counter.hasAtLeastKAutomorphisms(matrix, minAutomorphisms);
+        
+        if (!canAchieveTarget) {
+            // This PDG cannot possibly achieve the required automorphism count
+            // Create forbidden_graph_t with all assigned edges as the conflict reason
+            
+            forbidden_graph_t forbidden_graph;
+            int n = matrix.size();
+            
+            for (int i = 0; i < n; ++i) {
+                for (int j = i + 1; j < n; ++j) {
+                    if (matrix[i][j] != truth_value_unknown) {
+                        // Add assigned edges (both true and false) to conflict reason
+                        forbidden_graph.push_back(make_pair(matrix[i][j], make_pair(i, j)));
+                    }
+                }
+            }
+            
+            throw forbidden_graph;
+        }
+    } catch (const std::runtime_error& e) {
+        // Nauty computation failed on PDG (likely too many undefined edges)
+        // Be conservative and create conflict to avoid missing violations
+        
+        forbidden_graph_t forbidden_graph;
+        int n = matrix.size();
+        
+        for (int i = 0; i < n; ++i) {
+            for (int j = i + 1; j < n; ++j) {
+                if (matrix[i][j] != truth_value_unknown) {
+                    forbidden_graph.push_back(make_pair(matrix[i][j], make_pair(i, j)));
+                }
+            }
+        }
+        
+        throw forbidden_graph;
+    }
+}

@@ -163,14 +163,24 @@ void addPropagators(GraphSolver *solver, const propagators_config_t &propagators
         solver->add(0);
     }
 
-    // Automorphism counting propagator (final graphs only)
-    if (propagatorsConfig.minAutomorphisms > 1 || propagatorsConfig.autcountFrequency > 0) {
+    // Automorphism counting propagators
+    if (propagatorsConfig.minAutomorphisms > 1) {
+        // Always add final graph checker for validation
         solver->addComplexFullyDefinedGraphChecker(new AutcountChecker(
             solver->config.vertices,
             propagatorsConfig.minAutomorphisms,
             propagatorsConfig.autcountCutoff,
             propagatorsConfig.autcountAggressiveBypass
         ));
+        
+        // Add PDG checker for search pruning when frequency > 0
+        if (propagatorsConfig.autcountFrequency > 0) {
+            solver->addPartiallyDefinedGraphChecker(new AutcountPDGChecker(
+                solver->config.vertices,
+                propagatorsConfig.minAutomorphisms,
+                propagatorsConfig.autcountFrequency
+            ));
+        }
     }
 }
 

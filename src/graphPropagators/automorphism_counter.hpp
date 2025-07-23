@@ -32,6 +32,12 @@ private:
     // VF2 with early termination implementation
     bool vf2EarlyTermination(const adjacency_matrix_t& matrix, int k);
     
+    // Nauty FDG automorphism counting (replacement for igraph/BLISS)
+    long long countFDGAutomorphismsNauty(const adjacency_matrix_t& matrix);
+    
+    // Nauty PDG threshold checking with enumeration (complete VF2 replacement)
+    bool nautyPDGThresholdCheck(const adjacency_matrix_t& matrix, int k);
+    
     
     // Static callbacks for igraph (C API requirement)
     static igraph_error_t early_termination_callback(

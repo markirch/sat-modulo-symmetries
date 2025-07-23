@@ -2,6 +2,13 @@
 #include <iostream>
 #include <stdexcept>
 #include <limits>
+#include <utility>
+#include <vector>
+
+extern "C" {
+#include <nauty/nauty.h>
+#include <nauty/naututil.h>
+}
 
 AutomorphismCounter::AutomorphismCounter(int v, bool dir) 
     : vertices(v), directed(dir) {
@@ -238,85 +245,197 @@ bool AutomorphismCounter::vf2EarlyTermination(const adjacency_matrix_t& matrix, 
 }
 
 
-// Main interface: bypass + VF2 integration
+// Nauty PDG automorphism counting with enumeration (replacement for VF2)
+bool AutomorphismCounter::nautyPDGThresholdCheck(const adjacency_matrix_t& matrix, int k) {
+    // Find undefined edges
+    vector<std::pair<int,int>> undefined_edges;
+    if (directed) {
+        // For directed graphs: check all (i,j) pairs where i != j
+        for (int i = 0; i < vertices; i++) {
+            for (int j = 0; j < vertices; j++) {
+                if (i != j && matrix[i][j] == truth_value_unknown) {
+                    undefined_edges.push_back({i, j});
+                }
+            }
+        }
+    } else {
+        // For undirected graphs: check upper triangle only
+        for (int i = 0; i < vertices; i++) {
+            for (int j = i+1; j < vertices; j++) {
+                if (matrix[i][j] == truth_value_unknown) {
+                    undefined_edges.push_back({i, j});
+                }
+            }
+        }
+    }
+    
+    int num_undefined = undefined_edges.size();
+    
+    // If no undefined edges, it's an FDG - use direct Nauty counting
+    if (num_undefined == 0) {
+        long long exact_count = countFDGAutomorphismsNauty(matrix);
+        return exact_count >= k;
+    }
+    
+    
+    // For PDGs: enumerate all 2^k possible FDG assignments
+    int total_assignments = 1 << num_undefined;
+    
+    for (int mask = 0; mask < total_assignments; mask++) {
+        // Create FDG with this assignment
+        auto fdg = matrix;
+        for (int i = 0; i < num_undefined; i++) {
+            int u = undefined_edges[i].first;
+            int v = undefined_edges[i].second;
+            truth_value_t value = (mask & (1 << i)) ? truth_value_true : truth_value_false;
+            fdg[u][v] = value;
+            if (!directed) {
+                fdg[v][u] = value;  // Only set symmetric entry for undirected graphs
+            }
+        }
+        
+        // Count automorphisms for this FDG using Nauty
+        long long auts = countFDGAutomorphismsNauty(fdg);
+        
+        // Early termination: if any FDG meets threshold, PDG can achieve it
+        if (auts >= k) {
+            return true;
+        }
+    }
+    
+    // No FDG assignment reached the threshold
+    return false;
+}
+
+// Main interface: bypass + full Nauty integration  
 bool AutomorphismCounter::hasAtLeastKAutomorphisms(const adjacency_matrix_t& matrix, int k) {
     // 1. Simple bypass (100% accurate, no false negatives)
     if (simpleBypass(matrix, k)) {
         return true;
     }
     
-    // 2. VF2 with early termination (expensive fallback)
-    return vf2EarlyTermination(matrix, k);
+    // 2. Nauty for both FDGs and PDGs (complete VF2 replacement)
+    return nautyPDGThresholdCheck(matrix, k);
 }
 
-// Exact counting (for validation purposes)
-long long AutomorphismCounter::countExactAutomorphisms(const adjacency_matrix_t& matrix) {
-    // Check for unknown edges first
-    bool hasUnknownEdges = false;
-    for (vertex_t i = 0; i < vertices && !hasUnknownEdges; i++) {
-        for (vertex_t j = 0; j < vertices && !hasUnknownEdges; j++) {
-            if (matrix[i][j] == truth_value_unknown) {
-                hasUnknownEdges = true;
+// Nauty FDG automorphism counting (replacement for igraph/BLISS)
+long long AutomorphismCounter::countFDGAutomorphismsNauty(const adjacency_matrix_t& matrix) {
+    DYNALLSTAT(graph, g, g_sz);
+    DYNALLSTAT(int, lab, lab_sz);
+    DYNALLSTAT(int, ptn, ptn_sz);
+    DYNALLSTAT(int, orbits, orbits_sz);
+    static DEFAULTOPTIONS_GRAPH(options);
+    statsblk stats;
+    
+    int m = SETWORDSNEEDED(vertices);
+    
+    DYNALLOC2(graph, g, g_sz, vertices, m, "malloc");
+    DYNALLOC1(int, lab, lab_sz, vertices, "malloc");
+    DYNALLOC1(int, ptn, ptn_sz, vertices, "malloc");
+    DYNALLOC1(int, orbits, orbits_sz, vertices, "malloc");
+    
+    EMPTYGRAPH(g, m, vertices);
+    
+    // Configure options for directed vs undirected graphs
+    options.getcanon = FALSE;
+    options.defaultptn = TRUE;
+    options.userautomproc = nullptr;
+    options.userlevelproc = nullptr;
+    options.digraph = directed ? TRUE : FALSE;
+    
+    // Add edges from FDG (only truth_value_true edges)
+    if (directed) {
+        // For directed graphs: use ADDONEARC and check all (i,j) pairs
+        for (int i = 0; i < vertices; i++) {
+            for (int j = 0; j < vertices; j++) {
+                if (i != j && matrix[i][j] == truth_value_true) {
+                    ADDONEARC(g, i, j, m);
+                }
+            }
+        }
+    } else {
+        // For undirected graphs: use ADDONEEDGE
+        for (int i = 0; i < vertices; i++) {
+            for (int j = 0; j < vertices; j++) {
+                if (matrix[i][j] == truth_value_true) {
+                    ADDONEEDGE(g, i, j, m);
+                }
             }
         }
     }
     
-    if (hasUnknownEdges) {
-        // For PDGs, use VF2 with exact counting (no early termination)
-        igraph_t graph = convertToIgraph(matrix);
-        
-        // Set up VF2 context for exact counting
-        VF2EarlyTerminationContext ctx;
-        // Set target_count to a value that will never be reached,
-        // ensuring all automorphisms are counted. Use a very large value instead of max to avoid conversion issues.
-        ctx.target_count = 1000000000LL; // 1 billion should be more than enough for any practical case
-        ctx.current_count = 0;
-        ctx.matrix = &matrix; // Single matrix for automorphism
-        ctx.should_stop = false; // Will remain false as target_count is effectively infinite
-        
-        // Use VF2 for automorphism counting
-        igraph_error_t result = igraph_isomorphic_function_vf2(
-            &graph, &graph,  // Same graph for automorphism
-            nullptr, nullptr,  // No vertex colors
-            nullptr, nullptr,  // No edge colors  
-            nullptr, nullptr,  // No mapping output needed
-            vf2_automorphism_found_callback,  // This callback will now count all
-            nullptr,  // Default vertex compatibility (identity check for automorphism)
-            vf2_edge_compatibility_callback,  // The fixed SMS edge compatibility callback
-            &ctx  // Our context
-        );
-        
-        destroyIgraph(graph);
-        
-        // IGRAPH_STOP is a valid return code when early termination is triggered (not expected here)
-        if (result != IGRAPH_SUCCESS && result != IGRAPH_STOP) {
-            throw std::runtime_error("VF2 exact automorphism search failed with unexpected error");
+    densenauty(g, lab, ptn, orbits, &options, &stats, m, vertices, nullptr);
+    
+    long long total_automorphisms = stats.grpsize1;
+    for (int i = 0; i < stats.grpsize2; i++) {
+        total_automorphisms *= 10;
+    }
+    
+    DYNFREE(g, g_sz);
+    DYNFREE(lab, lab_sz);
+    DYNFREE(ptn, ptn_sz);
+    DYNFREE(orbits, orbits_sz);
+    
+    return total_automorphisms;
+}
+
+// Nauty exact counting for both FDGs and PDGs (complete VF2 replacement)
+long long AutomorphismCounter::countExactAutomorphisms(const adjacency_matrix_t& matrix) {
+    // Find undefined edges
+    vector<std::pair<int,int>> undefined_edges;
+    if (directed) {
+        // For directed graphs: check all (i,j) pairs where i != j
+        for (int i = 0; i < vertices; i++) {
+            for (int j = 0; j < vertices; j++) {
+                if (i != j && matrix[i][j] == truth_value_unknown) {
+                    undefined_edges.push_back({i, j});
+                }
+            }
+        }
+    } else {
+        // For undirected graphs: check upper triangle only
+        for (int i = 0; i < vertices; i++) {
+            for (int j = i+1; j < vertices; j++) {
+                if (matrix[i][j] == truth_value_unknown) {
+                    undefined_edges.push_back({i, j});
+                }
+            }
+        }
+    }
+    
+    int num_undefined = undefined_edges.size();
+    
+    // If no undefined edges, it's an FDG - use direct Nauty counting
+    if (num_undefined == 0) {
+        return countFDGAutomorphismsNauty(matrix);
+    }
+    
+    
+    // For PDGs: find maximum automorphisms across all 2^k possible FDG assignments
+    int total_assignments = 1 << num_undefined;
+    long long max_automorphisms = 0;
+    
+    for (int mask = 0; mask < total_assignments; mask++) {
+        // Create FDG with this assignment
+        auto fdg = matrix;
+        for (int i = 0; i < num_undefined; i++) {
+            int u = undefined_edges[i].first;
+            int v = undefined_edges[i].second;
+            truth_value_t value = (mask & (1 << i)) ? truth_value_true : truth_value_false;
+            fdg[u][v] = value;
+            if (!directed) {
+                fdg[v][u] = value;  // Only set symmetric entry for undirected graphs
+            }
         }
         
-        return ctx.current_count; // Returns the total count of automorphisms
-    }
-    
-    // For fully defined graphs, use igraph's exact automorphism counting
-    igraph_t graph = convertToIgraph(matrix);
-    igraph_bliss_info_t info;
-    memset(&info, 0, sizeof(info));
-    
-    igraph_error_t result = igraph_count_automorphisms(&graph, nullptr, IGRAPH_BLISS_FL, &info);
-    destroyIgraph(graph);
-    
-    if (result != IGRAPH_SUCCESS) {
-        if (info.group_size) {
-            igraph_free(info.group_size);
+        // Count automorphisms for this FDG using Nauty
+        long long auts = countFDGAutomorphismsNauty(fdg);
+        
+        // Track maximum
+        if (auts > max_automorphisms) {
+            max_automorphisms = auts;
         }
-        throw std::runtime_error("igraph automorphism counting failed");
     }
     
-    // Convert string result to long long
-    long long count = 1;
-    if (info.group_size) {
-        count = strtoll(info.group_size, nullptr, 10);
-        igraph_free(info.group_size);
-    }
-    
-    return count;
+    return max_automorphisms;
 }

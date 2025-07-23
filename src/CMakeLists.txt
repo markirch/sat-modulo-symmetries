@@ -13,6 +13,17 @@ include_directories(${IGRAPH_INCLUDE_DIRS})
 link_directories(${IGRAPH_LIBRARY_DIRS})
 link_libraries(${IGRAPH_LIBRARIES})
 
+# Find Nauty for enhanced automorphism counting
+find_path(NAUTY_INCLUDE_DIR NAMES nauty/nauty.h PATHS /opt/homebrew/opt/nauty/include)
+find_library(NAUTY_LIBRARY NAMES nauty PATHS /opt/homebrew/opt/nauty/lib)
+if(NAUTY_INCLUDE_DIR AND NAUTY_LIBRARY)
+    include_directories(${NAUTY_INCLUDE_DIR})
+    link_libraries(${NAUTY_LIBRARY})
+    message("Nauty found: ${NAUTY_LIBRARY}")
+else()
+    message(FATAL_ERROR "Nauty not found - required for automorphism counting")
+endif()
+
 set(sources "minimalityCheckCommon.cpp" "sms.cpp" "graph.cpp" "useful.cpp" "options.cpp" "minimalityCheck.cpp" "minimalityCheck_dir.cpp" "cubing.cpp" "qbf/universal.cpp" "qbf/universal2.cpp" "qbf/qcirParser.cpp" )
 if(GLASGOW)
 	list(APPEND sources "other/forbiddenSubgraph.cpp")

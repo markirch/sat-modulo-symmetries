@@ -6,6 +6,13 @@ find_package(Boost 1.74.0 REQUIRED COMPONENTS program_options graph)
 include_directories(${Boost_INCLUDE_DIRS})
 link_libraries(${Boost_LIBRARIES})
 
+# Find igraph for automorphism counting
+find_package(PkgConfig REQUIRED)
+pkg_check_modules(IGRAPH REQUIRED igraph)
+include_directories(${IGRAPH_INCLUDE_DIRS})
+link_directories(${IGRAPH_LIBRARY_DIRS})
+link_libraries(${IGRAPH_LIBRARIES})
+
 set(sources "minimalityCheckCommon.cpp" "sms.cpp" "graph.cpp" "useful.cpp" "options.cpp" "minimalityCheck.cpp" "minimalityCheck_dir.cpp" "cubing.cpp" "qbf/universal.cpp" "qbf/universal2.cpp" "qbf/qcirParser.cpp" )
 if(GLASGOW)
 	list(APPEND sources "other/forbiddenSubgraph.cpp")

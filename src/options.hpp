@@ -29,6 +29,12 @@ typedef struct
 
     string qcirFile;
     bool polarityHashing = false;
+    
+    // automorphism counting propagator
+    int autcountFrequency = 0;      // 0 = disabled, only check final graphs
+    int minAutomorphisms = 1;       // minimum required automorphisms
+    int autcountCutoff = 10000;     // computational cutoff
+    bool autcountAggressiveBypass = false;  // enable aggressive bypass optimizations
 } propagators_config_t;
 
 /**

@@ -43,6 +43,12 @@ void initOptions(SolverConfig &config, struct minimality_config_t &minimalityCon
       ("coloring-algo", po::value<int>(&propagatorsConfig.coloringAlgo), "Specify the graph coloring algorithm (0 means simple recursive; 1 means simple DPLL-based; 2 means SAT-based)")
       ("non-010-colorable,non010", po::bool_switch(&propagatorsConfig.non010colorable), "Search for non-010-colorable graphs (relates to Kochen-Specker graphs)")
       ("triangle-vars", po::value<int>(&propagatorsConfig.triangleVars)->implicit_value(0), "For problems which use triangle variables (variable to denote whether a given set of 3 vertices forms a triangle), specify where the triangle variables start")
+      ("autcount-frequency", po::value<int>(&propagatorsConfig.autcountFrequency)->default_value(0), "Frequency for automorphism counting propagator (0 = disabled, only check final graphs)")
+      ("minaut-frequency", po::value<int>(&propagatorsConfig.autcountFrequency), "Alias for --autcount-frequency")
+      ("min-automorphisms", po::value<int>(&propagatorsConfig.minAutomorphisms)->default_value(1), "Minimum required automorphisms for generated graphs")
+      ("minaut", po::value<int>(&propagatorsConfig.minAutomorphisms), "Alias for --min-automorphisms")
+      ("autcount-cutoff", po::value<int>(&propagatorsConfig.autcountCutoff)->default_value(10000), "Computational cutoff for automorphism counting")
+      ("autcount-aggressive-bypass", po::bool_switch(&propagatorsConfig.autcountAggressiveBypass), "Enable aggressive bypass optimizations for autcount")
       ;
     
 
@@ -79,6 +85,7 @@ void initOptions(SolverConfig &config, struct minimality_config_t &minimalityCon
 #include "graphPropagators/connectedChecker.hpp"
 #include "graphPropagators/planarity.hpp"
 #include "graphPropagators/coloringCheck.hpp"
+#include "graphPropagators/autcountChecker.hpp"
 #include "other/forbiddenSubgraph.hpp"
 #include "qbf/universal2.hpp"
 
@@ -154,6 +161,16 @@ void addPropagators(GraphSolver *solver, const propagators_config_t &propagators
         solver->add(qcirChecker->highestVariableInInstance);
         solver->add(-qcirChecker->highestVariableInInstance);
         solver->add(0);
+    }
+
+    // Automorphism counting propagator (final graphs only)
+    if (propagatorsConfig.minAutomorphisms > 1 || propagatorsConfig.autcountFrequency > 0) {
+        solver->addComplexFullyDefinedGraphChecker(new AutcountChecker(
+            solver->config.vertices,
+            propagatorsConfig.minAutomorphisms,
+            propagatorsConfig.autcountCutoff,
+            propagatorsConfig.autcountAggressiveBypass
+        ));
     }
 }
 

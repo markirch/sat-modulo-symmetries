@@ -50,6 +50,7 @@ void initOptions(SolverConfig &config, struct minimality_config_t &minimalityCon
       ("autcount-cutoff", po::value<int>(&propagatorsConfig.autcountCutoff)->default_value(10000), "Computational cutoff for automorphism counting")
       ("autcount-aggressive-bypass", po::bool_switch(&propagatorsConfig.autcountAggressiveBypass), "Enable aggressive bypass optimizations for autcount")
       ("autcount-depth", po::value<int>(&propagatorsConfig.autcountDepth)->default_value(15), "Maximum undefined edges for PDG enumeration (safety limit)")
+      ("maximize-automorphisms", po::bool_switch(&propagatorsConfig.maximizeAutomorphisms), "Enable adaptive automorphism maximum tracking and optimization")
       ;
     
 
@@ -87,6 +88,7 @@ void initOptions(SolverConfig &config, struct minimality_config_t &minimalityCon
 #include "graphPropagators/planarity.hpp"
 #include "graphPropagators/coloringCheck.hpp"
 #include "graphPropagators/autcountChecker.hpp"
+#include "graphPropagators/autcount_maximizer.hpp"
 #include "other/forbiddenSubgraph.hpp"
 #include "qbf/universal2.hpp"
 
@@ -165,8 +167,25 @@ void addPropagators(GraphSolver *solver, const propagators_config_t &propagators
     }
 
     // Automorphism counting propagators
-    if (propagatorsConfig.minAutomorphisms > 1) {
-        // Always add final graph checker for validation
+    if (propagatorsConfig.maximizeAutomorphisms) {
+        // Adaptive maximum tracking mode
+        solver->addComplexFullyDefinedGraphChecker(new AutcountMaximizerChecker(
+            *solver, // Pass solver reference for state access
+            solver->config.vertices,
+            propagatorsConfig.autcountCutoff
+        ));
+        
+        // Add PDG checker for search pruning when frequency > 0
+        if (propagatorsConfig.autcountFrequency > 0) {
+            solver->addPartiallyDefinedGraphChecker(new AutcountMaximizerPDGChecker(
+                *solver, // Pass solver reference
+                solver->config.vertices,
+                propagatorsConfig.autcountFrequency,
+                propagatorsConfig.autcountDepth
+            ));
+        }
+    } else if (propagatorsConfig.minAutomorphisms > 1) {
+        // Existing fixed threshold mode
         solver->addComplexFullyDefinedGraphChecker(new AutcountChecker(
             solver->config.vertices,
             propagatorsConfig.minAutomorphisms,
@@ -190,6 +209,12 @@ GraphSolver *createSolver(SolverConfig &config, struct minimality_config_t &mini
 {
     GraphSolver *solver = new GraphSolver(config, minimalitConfig);
     solver->set("quiet", 1);
+    
+    // Initialize adaptive automorphism tracking if enabled
+    if (propagatorsConfig.maximizeAutomorphisms) {
+        // Initialize maximum from minAutomorphisms parameter (default floor)
+        solver->initializeMaxAutomorphisms(propagatorsConfig.minAutomorphisms);
+    }
 
     if (!dimacsFile.empty())
     {

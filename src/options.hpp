@@ -36,6 +36,7 @@ typedef struct
     int autcountCutoff = 10000;     // computational cutoff
     bool autcountAggressiveBypass = false;  // enable aggressive bypass optimizations
     int autcountDepth = 15;         // maximum undefined edges for PDG enumeration
+    bool maximizeAutomorphisms = false;     // enable adaptive maximum tracking
 } propagators_config_t;
 
 /**

@@ -127,6 +127,48 @@ private:
 public:
   void addPartiallyDefinedGraphChecker(PartiallyDefinedGraphChecker *checker) { partiallyDefinedGraphCheckers.push_back(checker); }
   void addComplexFullyDefinedGraphChecker(ComplexFullyDefinedGraphChecker *checker) { complexFullyDefinedGraphCheckers.push_back(checker); }
+  
+  // Adaptive automorphism maximum tracking interface
+  int getMaxAutomorphisms() const { return maxAutomorphismsFound; }
+  int getGraphsWithMaxCount() const { return graphsWithMaxCount; }
+  void initializeMaxAutomorphisms(int initialThreshold) {
+    maxAutomorphismsFound = initialThreshold;
+    graphsWithMaxCount = 0;
+    printf("🎯 Initialized adaptive tracking with threshold: %d automorphisms\n", initialThreshold);
+  }
+  void updateMaxAutomorphisms(int count, const adjacency_matrix_t& matrix) {
+    if (count > maxAutomorphismsFound) {
+      printf("🎯 New maximum: %d automorphisms (previous: %d)\n", count, maxAutomorphismsFound);
+      
+      // Clean up old directory if it exists
+      if (maxAutomorphismsFound > 0) {
+        std::string oldDir = "aut_" + std::to_string(maxAutomorphismsFound);
+        removeDirectory(oldDir);
+      }
+      
+      maxAutomorphismsFound = count;
+      graphsWithMaxCount = 1;
+      
+      // Create new directory and save first graph
+      std::string newDir = "aut_" + std::to_string(count);
+      createDirectory(newDir);
+      saveGraphToFile(matrix, newDir + "/graph_1.txt");
+      
+    } else if (count == maxAutomorphismsFound) {
+      graphsWithMaxCount++;
+      printf("📊 Graph #%d with maximum %d automorphisms found\n", graphsWithMaxCount, count);
+      
+      // Save additional graph to existing directory
+      std::string dir = "aut_" + std::to_string(count);
+      std::string filename = dir + "/graph_" + std::to_string(graphsWithMaxCount) + ".txt";
+      saveGraphToFile(matrix, filename);
+    }
+  }
+
+private:
+  void createDirectory(const std::string& dirName);
+  void removeDirectory(const std::string& dirName);
+  void saveGraphToFile(const adjacency_matrix_t& matrix, const std::string& filename);
 
 private:
   GraphHandler *graphHandler;
@@ -142,6 +184,10 @@ private:
 
   bool inLookaheadState = false; // if true then skip propagator calls
   bool inPrerunState = false;
+  
+  // Adaptive automorphism maximum tracking state
+  int maxAutomorphismsFound = 0;        // Current maximum automorphism count found
+  int graphsWithMaxCount = 0;           // Number of graphs found with current maximum
 
   // additional properties which are ensured by some propagators
 

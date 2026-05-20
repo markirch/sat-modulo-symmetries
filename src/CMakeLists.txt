@@ -6,7 +6,7 @@ find_package(Boost 1.74.0 REQUIRED COMPONENTS program_options graph)
 include_directories(${Boost_INCLUDE_DIRS})
 link_libraries(${Boost_LIBRARIES})
 
-set(sources "minimalityCheckCommon.cpp" "sms.cpp" "graph.cpp" "useful.cpp" "options.cpp" "minimalityCheck.cpp" "minimalityCheck_dir.cpp" "cubing.cpp" "qbf/universal.cpp" "qbf/universal2.cpp" "qbf/qcirParser.cpp" )
+set(sources "minimalityCheckCommon.cpp" "sms.cpp" "graph.cpp" "useful.cpp" "options.cpp" "minimalityCheck.cpp" "minimalityCheckColex.cpp" "minimalityCheck_dir.cpp" "cubing.cpp" "qbf/universal.cpp" "qbf/universal2.cpp" "qbf/qcirParser.cpp" )
 if(GLASGOW)
 	list(APPEND sources "other/forbiddenSubgraph.cpp")
 endif()
@@ -74,6 +74,11 @@ install(TARGETS
 )
 install(FILES ${CADICAL_LIBRARY} DESTINATION lib RENAME libsmscadical.a)
 install(FILES "sms.hpp" "cadical.hpp" "useful.h" "graphChecker.hpp" "minimalityCheck.hpp" DESTINATION include/sms)
+
+# bash completion
+install(FILES "${PROJECT_SOURCE_DIR}/completions/smsg.bash"
+	DESTINATION share/bash-completion/completions
+	RENAME smsg)
 
 
 # commands for adding Z3

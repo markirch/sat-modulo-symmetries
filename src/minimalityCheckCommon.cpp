@@ -29,7 +29,9 @@ void MinimalityChecker::checkProperty(const adjacency_matrix_t &matrix)
         for (auto ordering : vertexOrderings)
         {
             auto matrixCopy = m;
-            if (directed)
+            if (useColexOrdering)
+                checkMinimalityColex(matrixCopy, ordering, config);
+            else if (directed)
                 checkMinimalityDir(matrixCopy, ordering, config);
             else
                 checkMinimality(matrixCopy, ordering, config);
@@ -55,15 +57,23 @@ void MinimalityChecker::checkProperty(const adjacency_matrix_t &matrix)
 
         if (symBreakClauses)
         {
-            for (size_t i = 0; i < signedEdges.size(); i++)
-                fprintf(symBreakClauses, "%s(%d,%d) ", signedEdges[i].first == truth_value_true ? "-" : "", signedEdges[i].second.first, signedEdges[i].second.second);
-            // fprintf(symBreakClauses, "\n");
+            if (numberOfAddedClauses > 0)
+                fprintf(symBreakClauses, ",\n");
 
-            fprintf(symBreakClauses, ";");
-            // print permutation
-            for (auto v : e.permutation)
-                fprintf(symBreakClauses, " %d", v);
-            fprintf(symBreakClauses, "\n");
+            fprintf(symBreakClauses, "[[");
+            for (size_t i = 0; i < signedEdges.size(); i++)
+            {
+                int sign = signedEdges[i].first == truth_value_true ? -1 : 1;
+                fprintf(symBreakClauses, "[%d,%d,%d]%s",
+                        sign,
+                        signedEdges[i].second.first,
+                        signedEdges[i].second.second,
+                        i + 1 == signedEdges.size() ? "" : ",");
+            }
+            fprintf(symBreakClauses, "],[");
+            for (size_t i = 0; i < e.permutation.size(); i++)
+                fprintf(symBreakClauses, "%d%s", e.permutation[i], i + 1 == e.permutation.size() ? "" : ",");
+            fprintf(symBreakClauses, "]]");
         }
         throw signedEdges;
     }

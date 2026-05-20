@@ -16,10 +16,10 @@ int main(int argc, char const **argv)
     GraphSolver *solver = parseOptions(argc, argv, vm);
 
     // TODO parse arguments
-    solver->sms_solve();
+    int result = solver->sms_solve();
 
     delete solver;
 
     printf("Total time: %f\n", ((double)clock() - start) / CLOCKS_PER_SEC);
-    return 0;
+    return result;
 }

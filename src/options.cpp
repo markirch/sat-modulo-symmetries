@@ -29,6 +29,8 @@ void initOptions(SolverConfig &config, struct minimality_config_t &minimalityCon
       ("frequency", po::value<int>(&minimalityConfig.frequency)->default_value(DEFAULT_MINIMALITY_FREQUENCY), "The inverse frequency with which to call the minimality check, i.e., call every f-th time the propagator is called")
       ("cutoff", po::value<int>(&minimalityConfig.cutoff)->default_value(DEFAULT_MINIMALITY_CUTOFF), "The cutoff for the minimality check (0 for deactivating the cutoff).")
       ("initial-partition", po::value<vector<int>>()->multitoken(), "Set the initial partition for the minimality check, given as a sequence of partition sizes (integers). The minimality check will look for permutations that preserve partition membership")
+      ("colex-ordering", po::bool_switch(&minimalityConfig.useColexOrdering), "Use column-wise (colex) minimality check (experimental)")
+      ("sym-break-clauses", po::value<std::string>(&minimalityConfig.symBreakClausesFile),"Print the symmetry breaking clauses to file.")
       ;
       
     // try to sort them by general relevance
@@ -50,6 +52,7 @@ void initOptions(SolverConfig &config, struct minimality_config_t &minimalityCon
       ("simplify", po::value<std::string>(&config.simplifiedFormulaFile), "Simplify the CNF formula and write it to the given file. (Directly after prerun)")
       ("learned-clauses", po::value<std::string>(&config.learnedClausesFile),"Write the learned clauses to the given file after prerun")
       ("max-learned-clause-size", po::value<int>(&config.maxPrintedLearnedClauseSize)->default_value(5), "The maximal size of the learned clauses that should be printed (also for `simplify`)")
+      ("lrat-output", po::value<std::string>(&config.lratFile), "Write LRAT proof to the given file (for UNSAT results)")
       ("prerun", po::value<int>(&config.prerunTime), "Run the solver for the given amount of seconds before creating cubes/ simplified formula/ output learned clauses/ activating lookahead.")
       ("assignment-cutoff", po::value<int>(&config.assignmentCutoff), "Create cubes when the number of assigned variables exceeds this (using lookahead heuristic for branching)") // TODO distinguish between different cubing types
       ("simple-assignment-cutoff", po::value<int>(&config.simpleAssignmentCutoff), "Create cubes soley based on edge variables. Cubes are blocked by clauses until unsat is reached")

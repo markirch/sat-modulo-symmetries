@@ -39,6 +39,8 @@ struct minimality_config_t
     int cutoff = DEFAULT_MINIMALITY_CUTOFF;
     vector<vertex_ordering_t> vertexOrderings;
     bool turnoffSMS = false;
+    bool useColexOrdering = false;
+    std::string symBreakClausesFile;
 };
 
 inline partition_t getDefaultInitialPartition(int vertices)
@@ -64,6 +66,7 @@ inline vector<vertex_ordering_t> getDefaultVertexOrderings(int vertices)
  * Throws LimitReachedException if cutoff limit is reached
  */
 void checkMinimality(adjacency_matrix_t &adjacency_matrix, vertex_ordering_t vertex_ordering, minimalit_check_config_t config);
+void checkMinimalityColex(adjacency_matrix_t &adjacency_matrix, vertex_ordering_t vertex_ordering, minimalit_check_config_t config);
 void checkMinimalityDir(adjacency_matrix_t &adjacency_matrix, vertex_ordering_t vertex_ordering, minimalit_check_config_t config);
 void checkMinimalityComplement(adjacency_matrix_t &adjacency_matrix, vertex_ordering_t vertex_ordering, minimalit_check_config_t config);
 void checkMinimalityMultiple(vector<adjacency_matrix_t> &adjacency_matrices, vertex_ordering_t vertex_ordering, minimalit_check_config_t config);
@@ -75,9 +78,11 @@ private:
     vector<vertex_ordering_t> vertexOrderings;
     minimalit_check_config_t config;
     FILE *symBreakClauses = nullptr;
+    bool ownsSymBreakClauses = false;
 
     bool directed = false;
     bool maximize = false;
+    bool useColexOrdering = false;
 
 public:
     MinimalityChecker(int frequency, partition_t initial_partition, vector<vertex_ordering_t> vertexOrderings, int cutoff, FILE *symBreakClauses)
@@ -88,6 +93,7 @@ public:
         this->vertexOrderings = vertexOrderings;
         this->config.cutoff = cutoff;
         this->symBreakClauses = symBreakClauses;
+        this->useColexOrdering = false;
     }
 
     MinimalityChecker(struct minimality_config_t config, int vertices, bool directed = false, bool maximize = false)
@@ -97,6 +103,15 @@ public:
         this->config.initial_partition = config.initialPartition;
         this->vertexOrderings = config.vertexOrderings;
         this->config.cutoff = config.cutoff;
+        this->useColexOrdering = config.useColexOrdering;
+        if (!config.symBreakClausesFile.empty())
+        {
+            this->symBreakClauses = fopen(config.symBreakClausesFile.c_str(), "w");
+            if (!this->symBreakClauses)
+                EXIT_UNWANTED_STATE
+            this->ownsSymBreakClauses = true;
+            fprintf(this->symBreakClauses, "{ \"sym_clauses\": [\n");
+        }
 
         // handle uninitialized values
         if (this->config.initial_partition.empty())
@@ -110,6 +125,15 @@ public:
 
         this->directed = directed;
         this->maximize = maximize;
+    }
+
+    ~MinimalityChecker()
+    {
+        if (ownsSymBreakClauses && symBreakClauses)
+        {
+            fprintf(symBreakClauses, " ]\n}\n");
+            fclose(symBreakClauses);
+        }
     }
 
     void checkProperty(const adjacency_matrix_t &matrix);

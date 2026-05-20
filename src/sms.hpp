@@ -28,6 +28,7 @@ typedef struct
   string simplifiedFormulaFile; // write simplified formula to the file including small redundant clauses TODO be more specific
   string learnedClausesFile;    // write all learned clauses up to the given size to the file TODO check whether this is also for irredundant clauses
   int maxPrintedLearnedClauseSize = 5;
+  string lratFile; // write LRAT proof to the given file
 
   // cubing related
   int assignmentCutoff = 0;       // create a cube when the number of assigned variables exceeds this

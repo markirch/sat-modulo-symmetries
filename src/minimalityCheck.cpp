@@ -70,7 +70,8 @@ void isMinimal(vertex_ordering_t vertices, partition_t partition, int row, adjac
         partition_t newPartition = partition; // copy partition (works because vectors)
         vertex_ordering_t newVertices = vertices;
 
-        newPartition[row + 1] = 1;
+        if (row + 1 < n)
+            newPartition[row + 1] = 1;
         newVertices[row] = vertices[i];
         newVertices[i] = vertices[row];
 
@@ -208,7 +209,8 @@ void isMinimalVertex(vertex_ordering_t vertices, partition_t partition, int row,
                 return;
         }
 
-        partition[start + notAdjacentList.size() + unknownList.size()] = 1; // start of partition with one list
+        if (start + (vertex_t)(notAdjacentList.size() + unknownList.size()) < n)
+            partition[start + notAdjacentList.size() + unknownList.size()] = 1; // start of partition with one list
         col = end;
     }
 
@@ -325,7 +327,8 @@ void isMinimalMultiple(vertex_ordering_t vertices, partition_t partition, int ro
         partition_t newPartition = partition; // copy partition (works because vectors)
         vertex_ordering_t newVertices = vertices;
 
-        newPartition[row + 1] = 1;
+        if (row + 1 < n)
+            newPartition[row + 1] = 1;
         newVertices[row] = vertices[i];
         newVertices[i] = vertices[row];
 
@@ -467,7 +470,8 @@ void isMinimalVertexMultiple(vertex_ordering_t vertices, partition_t partition, 
                     return;
             }
 
-            partition[start + notAdjacentList.size() + unknownList.size()] = 1; // start of partition with one list
+            if (start + (vertex_t)(notAdjacentList.size() + unknownList.size()) < n)
+                partition[start + notAdjacentList.size() + unknownList.size()] = 1; // start of partition with one list
             col = end;
         }
     }
@@ -570,7 +574,8 @@ void isMinimalComplement(vertex_ordering_t vertices, partition_t partition, int 
         partition_t newPartition = partition; // copy partition (works because vectors)
         vertex_ordering_t newVertices = vertices;
 
-        newPartition[row + 1] = 1;
+        if (row + 1 < n)
+            newPartition[row + 1] = 1;
         newVertices[row] = vertices[i];
         newVertices[i] = vertices[row];
 
@@ -711,7 +716,8 @@ void isMinimalVertexComplement(vertex_ordering_t vertices, partition_t partition
                 return;
         }
 
-        partition[start + notAdjacentList.size() + unknownList.size()] = 1; // start of partition with one list
+        if (start + (vertex_t)(notAdjacentList.size() + unknownList.size()) < n)
+            partition[start + notAdjacentList.size() + unknownList.size()] = 1; // start of partition with one list
         col = end;
     }
 

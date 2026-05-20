@@ -62,6 +62,22 @@ GraphSolver::GraphSolver(SolverConfig config, struct minimality_config_t minimal
       }
     }
   }
+
+  if (!config.lratFile.empty())
+  {
+    std::cout << "Enabling LRAT proof output to: " << config.lratFile << std::endl;
+    if (!this->set("lrat", 1))
+    {
+      std::cerr << "Failed to enable LRAT format" << std::endl;
+      throw std::runtime_error("Failed to enable LRAT format");
+    }
+
+    if (!this->trace_proof(config.lratFile.c_str()))
+    {
+      std::cerr << "Failed to open LRAT proof file: " << config.lratFile << std::endl;
+      throw std::runtime_error("Failed to open LRAT proof file");
+    }
+  }
 }
 
 // TODO be careful with fully defined graph checkers to adapt observed and increase arrays if necessary

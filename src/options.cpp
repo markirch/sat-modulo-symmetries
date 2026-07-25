@@ -169,7 +169,19 @@ GraphSolver *createSolver(SolverConfig &config, struct minimality_config_t &mini
     {
         int maxVar;
         solver->read_dimacs(dimacsFile.c_str(), maxVar);
+        int oldNumVars = solver->numVars;
         solver->numVars = std::max(solver->numVars, maxVar);
+        // Resize internal tracking structures BEFORE observing new vars so that
+        // notify_assignment never writes out-of-bounds.
+        solver->extendVarTracking(solver->numVars);
+        // Observe any new variables introduced by the DIMACS file so that
+        // notify_assignment is called on them and currentAssignment tracks them.
+        // This is essential when users add CNF auxiliary variables (e.g., for
+        // cardinality counters in color-symmetry breakers).
+        for (int v = oldNumVars + 1; v <= solver->numVars; v++)
+        {
+            solver->add_observed_var(v);
+        }
     }
 
     if (!config.cubeFileTest.empty())

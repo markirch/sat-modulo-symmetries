@@ -80,6 +80,14 @@ public:
 
   int sms_solve();                                                                     // TODO Same return values as CaDiCaL::solve but also takes fully defined graphs into account
   vector<vector<int>> getEdgeVariables() { return graphHandler->getEdgeVariables(); }; // returns the edge variables used for representing the graph
+  // Resize internal variable-tracking vectors to accommodate variables added externally
+  // (e.g., auxiliary variables from a user DIMACS file).
+  void extendVarTracking(int newMaxVar) {
+    if ((int)currentAssignment.size() <= newMaxVar)
+      currentAssignment.resize(newMaxVar + 1, truth_value_unknown);
+    if ((int)isFixed.size() <= newMaxVar)
+      isFixed.resize(newMaxVar + 1, false);
+  }
   void printStats();
   void generateCubes(int assignmentCutoff);
   void createGame(float randomize = 0, vector<int> assumptions = {}, int recLvl = 0); // print the trail on a conflict or if all clauses are satisfied using lookeahead

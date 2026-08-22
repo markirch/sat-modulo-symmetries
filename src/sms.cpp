@@ -9,6 +9,17 @@ GraphSolver::GraphSolver(SolverConfig config, struct minimality_config_t minimal
 {
   current_trail.push_back(vector<int>());
   this->vertices = config.vertices;
+
+  // Set up proof tracing BEFORE connecting propagator (CaDiCaL requires this order).
+  if (!config.proofFile.empty())
+  {
+    if (!this->trace_proof(config.proofFile.c_str()))
+    {
+      std::cerr << "Failed to open proof file for writing: " << config.proofFile << std::endl;
+      throw std::runtime_error("trace_proof failed");
+    }
+  }
+
   connect_external_propagator(this);
   connect_fixed_listener(this);
   graphHandler = new GraphHandler(vertices, config.directed);
@@ -307,6 +318,25 @@ int GraphSolver::sms_solve()
   printStats();
 
   LOG(LOG_LEVEL_INFO, "Result: " << res);
+
+  if (!config.proofFile.empty())
+  {
+    this->flush_proof_trace();
+    this->close_proof_trace();
+    if (res == 20)
+    {
+      LOG(LOG_LEVEL_INFO, "UNSAT DRAT proof written to: " << config.proofFile);
+    }
+    else
+    {
+      LOG(
+          LOG_LEVEL_WARNING,
+          "Proof trace written to " << config.proofFile
+                                    << "; it is not an UNSAT certificate because the result was "
+                                    << res);
+    }
+  }
+
   return res;
 }
 

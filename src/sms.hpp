@@ -46,6 +46,8 @@ typedef struct
   int createGameRecLvl = 0; // the depth of the lookahead on the truth values for creating games
 
   vector<string> cadicalConfig; // space-separated list of command-line options for cadical without the -- prefixes
+
+  string proofFile; // if non-empty, write DRAT proof to this file
 } SolverConfig;
 
 typedef struct

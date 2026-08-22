@@ -1,4 +1,7 @@
 #include "useful.h"
+#include <cstdlib>
+#include <exception>
+#include <iostream>
 #include <boost/program_options.hpp>
 namespace po = boost::program_options;
 
@@ -12,14 +15,21 @@ int main(int argc, char const **argv)
 {
     clock_t start = clock();
 
-    po::variables_map vm;
-    GraphSolver *solver = parseOptions(argc, argv, vm);
+    try
+    {
+        po::variables_map vm;
+        GraphSolver *solver = parseOptions(argc, argv, vm);
 
-    // TODO parse arguments
-    int result = solver->sms_solve();
+        int result = solver->sms_solve();
 
-    delete solver;
+        delete solver;
 
-    printf("Total time: %f\n", ((double)clock() - start) / CLOCKS_PER_SEC);
-    return result;
+        printf("Total time: %f\n", ((double)clock() - start) / CLOCKS_PER_SEC);
+        return result;
+    }
+    catch (const std::exception &error)
+    {
+        std::cerr << "Error: " << error.what() << std::endl;
+        return EXIT_FAILURE;
+    }
 }

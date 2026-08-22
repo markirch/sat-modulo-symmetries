@@ -1,5 +1,7 @@
 #include "options.hpp"
 
+#include <stdexcept>
+
 po::options_description main_opts("Main options");
 po::options_description output_opts("Output options");
 po::options_description minimality_opts("Minimality checker options");
@@ -49,6 +51,7 @@ void initOptions(SolverConfig &config, struct minimality_config_t &minimalityCon
     
 
     other_opts.add_options()
+      ("proof", po::value<std::string>(&config.proofFile), "Write a DRAT proof for a pure-DIMACS decision solve (requires --dimacs and --no-SMS)")
       ("simplify", po::value<std::string>(&config.simplifiedFormulaFile), "Simplify the CNF formula and write it to the given file. (Directly after prerun)")
       ("learned-clauses", po::value<std::string>(&config.learnedClausesFile),"Write the learned clauses to the given file after prerun")
       ("max-learned-clause-size", po::value<int>(&config.maxPrintedLearnedClauseSize)->default_value(5), "The maximal size of the learned clauses that should be printed (also for `simplify`)")
@@ -162,6 +165,38 @@ void addPropagators(GraphSolver *solver, const propagators_config_t &propagators
 
 GraphSolver *createSolver(SolverConfig &config, struct minimality_config_t &minimalitConfig, propagators_config_t &propagatorsConfig, string dimacsFile)
 {
+    if (!config.proofFile.empty())
+    {
+        if (dimacsFile.empty())
+            throw std::invalid_argument("--proof requires a DIMACS input file");
+        if (!minimalitConfig.turnoffSMS)
+            throw std::invalid_argument(
+                "--proof requires --no-SMS: dynamic minimality clauses are not "
+                "part of the DIMACS formula checked by a standalone DRAT verifier");
+        if (propagatorsConfig.generate_connected || propagatorsConfig.planar ||
+            !propagatorsConfig.forbiddenSubgraphFile.empty() ||
+            !propagatorsConfig.forbiddenInducedSubgraphFile.empty() ||
+            propagatorsConfig.minChromaticNumber > 0 ||
+            propagatorsConfig.non010colorable ||
+            !propagatorsConfig.qcirFile.empty())
+            throw std::invalid_argument(
+                "--proof cannot be combined with graph-property propagators: "
+                "their semantic clauses are not part of the DIMACS formula "
+                "checked by a standalone DRAT verifier");
+        if (!config.lratFile.empty())
+            throw std::invalid_argument("--proof and --lrat-output cannot be used together");
+        if (config.allModels)
+            throw std::invalid_argument(
+                "--proof cannot be combined with --all-graphs: model-blocking "
+                "clauses would make the final proof certify an augmented formula");
+        if (config.assignmentCutoff || config.simpleAssignmentCutoff ||
+            config.createGame || !config.cubeFile.empty() ||
+            !config.cubeFileTest.empty())
+            throw std::invalid_argument(
+                "--proof supports a single decision solve only; cubing, game, "
+                "and cube-test modes alter the formula or solve under assumptions");
+    }
+
     GraphSolver *solver = new GraphSolver(config, minimalitConfig);
     solver->set("quiet", 1);
 

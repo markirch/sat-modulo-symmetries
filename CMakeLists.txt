@@ -2,6 +2,8 @@ cmake_minimum_required(VERSION 3.12)
 
 project(SMS VERSION "1.0" LANGUAGES C CXX)
 
+include(CTest)
+
 # set(CMAKE_EXE_LINKER_FLAGS "-static")
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -37,6 +39,16 @@ else ()
 endif()
 
 add_subdirectory(src)
+
+if(BUILD_TESTING)
+	add_test(
+		NAME dimacs_auxiliary_variables
+		COMMAND bash
+			"${PROJECT_SOURCE_DIR}/tests/check_dimacs_auxiliary_variables.sh"
+			"$<TARGET_FILE:smsg>"
+			"${PROJECT_SOURCE_DIR}/tests/dimacs_auxiliary_variables.cnf"
+	)
+endif()
 # add_subdirectory(src_directed)
 # add_subdirectory(src_hypher_graph)
 # add_subdirectory(src_hypher_graph_incidence)
